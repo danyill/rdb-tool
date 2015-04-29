@@ -36,82 +36,25 @@ BASE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)),INPUT_FOLDE
 # this needs to be a character which can't be used in file RDB naming and
 # SEL don't use it within their filename structure.
 RDB_SEPARATOR = '/'
+SEL_expression = r'[\w :+/\\()!,.-_\\*]*'
+SEL_setting_EOL = r'\x1c\r\n'
+SEL_setting_name = r'[\w _]*'
 
 from thirdparty.OleFileIO_PL import OleFileIO_PL
 
-def arra():
-  rdat = 'a'
-  myfile = open('output/combined.txt', 'r')
-  with myfile as f:
-    rdat = f.read()
-
-  print(rdat)
-
-  SEL_expression = r'[\w :+/\\()!,.-_\\*]*'
-  SEL_setting_EOL = r'\x1c\r\n'
-  SEL_setting_name = r'[\w _]*'
-  #  print re.findall(pattern, string, flags)
-  # print re.findall('^'+sys.argv[1]+'.*\r\n', rdat, flags=re.MULTILINE)
-
-  # this is for finding named settings of sys.argv[1]
-  print "variable of the name: " + sys.argv[1]
-
-  variable_name = re.findall('^' + sys.argv[1] + ",\"([\w :+/()!,.-]*)\"\x1c\r\n", rdat, flags=re.MULTILINE)
-  variable_name = re.findall('^' + sys.argv[1] + 
-                             ",\"(" + SEL_expression + ")\"" + 
-                             SEL_setting_EOL, 
-                             rdat, flags=re.MULTILINE)
-
-  print sys.argv[1] + '=' + str(variable_name)
-  # SV1,"(51P1T+67P1T+67N1T+IN206+IN208*LT8+SV1)*50P5"
-  print "used in: " 
-
-  print re.findall('^' + SEL_setting_name + ",\"" + 
-                   SEL_expression + sys.argv[1] + SEL_expression 
-                   + "\"" + SEL_setting_EOL, 
-                   rdat, flags=re.MULTILINE) 
-
-  myfile.close()
-
-
-def save_stream (ole, stream):
-    fname = str(stream).replace('/','_')
-    if fname is not None:
-        f = open(os.path.join('output',fname), 'wb')
-        data = ole.openstream(stream).getvalue()
-        f.write(data)
-        f.close()
-
-def process_ole_streams(filename):
+def get_ole_data(filename):
+    data = []
     try:
         ole = OleFileIO_PL.OleFileIO(filename)
         listdir = ole.listdir()
-        streams = []
-        dantest = []
         for direntry in listdir:            
-            for i, val in enumerate(direntry):
-                print str(i) + " " + val + " " + str(dantest)
-                if i <= len(dantest)-1 and dantest != []: 
-                    print dantest[i]
-                    if dantest[i][0] == val:
-                        #dantest[i][0].append(val)
-                        pass
-                    else:
-                        print('hi')
-                        dantest.append([val])
-                elif dantest == [] or i > len(dantest):
-                    print('really')
-                    dantest.append([val])
-            sys.exit()
-        print dantest
-        print streams
-        #for r in streams:
-        #    # print r
-        #    save_stream(ole, r)
+            #print direntry
+            data.append([direntry, ole.openstream(direntry).getvalue()])
     except:
         print 'Failed to read streams.'
+    return data
 
-def start(arg=None):
+def main(arg=None):
     parser = argparse.ArgumentParser(
         description='Process individual or multiple RDB files and produce summary'\
             ' of results as a csv or xls file.',
@@ -157,21 +100,64 @@ def start(arg=None):
 
     files_to_do = return_file_paths(path_result, RDB_EXTENSION)
     if files_to_do != []:
-        print(files_to_do)
+        # print(files_to_do)
         process_rdb_files(files_to_do, args)
     else:
         print('Found nothing to do')
         sys.exit()
-    
-    #print args.settings
-    #print args.design
-    #print args.path
 
 def process_rdb_files(files_to_do, args):
     for filename in files_to_do:      
-        rdb_info = process_ole_streams(filename)
+        # print filename
+        rdb_info = get_ole_data(filename)
+        # print rdb_info
+        parameter_info = extract_parameters(filename, rdb_info, args)
+        # print parameter_info
+        display_info(parameter_info)
     pass
 
+def display_info(parameter_info):
+    lengths = []
+    # first pass to determine column widths:
+    for line in parameter_info:
+        for index,element in enumerate(line):
+            try:
+                lengths[index] = max(lengths[index], len(element))
+            except IndexError:
+                lengths.append(len(element))
+    
+    # now display in columns            
+    for line in parameter_info:
+        display_line = '' 
+        for index,element in enumerate(line):
+            display_line += element.ljust(lengths[index]+2,' ')
+        print display_line
+
+    # need to add sorting options
+
+def extract_parameters(filename, rdb_info, args):
+    parameter_info=[]
+    for stream in rdb_info:
+        for parameter in args.settings:
+            # parameters are always:
+            # Relays > Setting Name > Settings Files
+            # so length is always at least 3
+            if len(stream[0]) >= 3:
+                return_value = extract_parameter_from_stream(parameter,\
+                    stream[1])
+                if return_value <> []:
+                    filename = os.path.basename(filename)
+                    settings_name = str(stream[0][1])
+                    stream_name = str(stream[0][-1])
+                    parameter_info.append([filename, settings_name,\
+                        stream_name, parameter, return_value[0]])
+    return parameter_info
+
+def extract_parameter_from_stream(parameter,stream):
+      return re.findall('^' + parameter + \
+            ",\"(" + SEL_expression + ")\"" + \
+            SEL_setting_EOL, \
+            stream, flags=re.MULTILINE)
 
 def return_file_paths(path_result, file_extension):
     files_to_do = []
@@ -185,6 +171,42 @@ def return_file_paths(path_result, file_extension):
                 # walk about see what we can find
                 files_to_do += walkabout(p_or_f, file_extension)
     return files_to_do
+    
+if __name__ == '__main__':
+    main('*.rdb OUT101')
+
+def arra():
+  rdat = 'a'
+  myfile = open('output/combined.txt', 'r')
+  with myfile as f:
+    rdat = f.read()
+
+  print(rdat)
+
+  
+  #  print re.findall(pattern, string, flags)
+  # print re.findall('^'+sys.argv[1]+'.*\r\n', rdat, flags=re.MULTILINE)
+
+  # this is for finding named settings of sys.argv[1]
+  print "variable of the name: " + sys.argv[1]
+
+  variable_name = re.findall('^' + sys.argv[1] + ",\"([\w :+/()!,.-]*)\"\x1c\r\n", rdat, flags=re.MULTILINE)
+  variable_name = re.findall('^' + sys.argv[1] + 
+                             ",\"(" + SEL_expression + ")\"" + 
+                             SEL_setting_EOL, 
+                             rdat, flags=re.MULTILINE)
+
+  print sys.argv[1] + '=' + str(variable_name)
+  # SV1,"(51P1T+67P1T+67N1T+IN206+IN208*LT8+SV1)*50P5"
+  print "used in: " 
+
+  print re.findall('^' + SEL_setting_name + ",\"" + 
+                   SEL_expression + sys.argv[1] + SEL_expression 
+                   + "\"" + SEL_setting_EOL, 
+                   rdat, flags=re.MULTILINE) 
+
+  myfile.close()
+
 
 def walkabout(p_or_f, file_extension):
     """ searches through a path p_or_f, picking up all files with EXTN
@@ -198,7 +220,3 @@ def walkabout(p_or_f, file_extension):
                 print("Found: " + name)
     print('here you are sir')
     print return_files
-    
-if __name__ == '__main__':
-    start('test.rdb asdf')
-    
