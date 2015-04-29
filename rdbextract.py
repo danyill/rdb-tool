@@ -107,14 +107,20 @@ def main(arg=None):
         sys.exit()
 
 def process_rdb_files(files_to_do, args):
+    parameter_info = []
     for filename in files_to_do:      
         # print filename
         rdb_info = get_ole_data(filename)
         # print rdb_info
-        parameter_info = extract_parameters(filename, rdb_info, args)
-        # print parameter_info
-        display_info(parameter_info)
-    pass
+        #parameter_info = extract_parameters(filename, rdb_info, args)
+        #print parameter_info
+        #display_info(parameter_info)
+        parameter_info += extract_parameters(filename, rdb_info, args)
+    #print parameter_info
+    results_for_display = []
+    #for k in parameter_info:
+    #    results_for_display.join(k)
+    display_info(parameter_info)
 
 def display_info(parameter_info):
     lengths = []
@@ -126,6 +132,7 @@ def display_info(parameter_info):
             except IndexError:
                 lengths.append(len(element))
     
+    parameter_info.insert(0,['File','Name','Setting','RDB','Val'])
     # now display in columns            
     for line in parameter_info:
         display_line = '' 
