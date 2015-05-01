@@ -78,17 +78,6 @@ OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val','FID']
 
 from thirdparty.OleFileIO_PL import OleFileIO_PL
 
-def get_ole_data(filename):
-    data = []
-    try:
-        ole = OleFileIO_PL.OleFileIO(filename)
-        listdir = ole.listdir()
-        for direntry in listdir:            
-            data.append([direntry, ole.openstream(direntry).getvalue()])
-    except:
-        print 'Failed to read streams in file: ' + filename
-    return data
-
 def main(arg=None):
     parser = argparse.ArgumentParser(
         description='Process individual or multiple RDB files and produce summary'\
@@ -141,7 +130,42 @@ def main(arg=None):
     else:
         print('Found nothing to do for path: ' + args.path[0])
         sys.exit()
+        os.system("Pause")
+    
+def return_file_paths(args_path, file_extension):
+    paths_to_work_on = []
+    for p in args_path:
+        p = p.translate(None, ",\"")
+        if not os.path.isabs(p):
+            paths_to_work_on +=  glob.glob(os.path.join(BASE_PATH,p))
+        else:
+            paths_to_work_on += glob.glob(p)
+            
+    files_to_do = []
+    # make a list of files to iterate over
+    if paths_to_work_on != None:
+        for p_or_f in paths_to_work_on:
+            if os.path.isfile(p_or_f) == True:
+                # add file to the list
+                print os.path.normpath(p_or_f)
+                files_to_do.append(os.path.normpath(p_or_f))
+            elif os.path.isdir(p_or_f) == True:
+                # walk about see what we can find
+                files_to_do = walkabout(p_or_f, file_extension)
+    return files_to_do        
 
+def walkabout(p_or_f, file_extension):
+    """ searches through a path p_or_f, picking up all files with EXTN
+    returns these in an array.
+    """
+    return_files = []
+    for root, dirs, files in os.walk(p_or_f, topdown=False):
+        #print files
+        for name in files:
+            if (os.path.basename(name)[-3:]).upper() == file_extension:
+                return_files.append(os.path.join(root,name))
+    return return_files
+    
 def process_rdb_files(files_to_do, args):
     parameter_info = []
     
@@ -176,24 +200,17 @@ def process_rdb_files(files_to_do, args):
 
     if args.screen == True:
         display_info(parameter_info)
-
-def display_info(parameter_info):
-    lengths = []
-    # first pass to determine column widths:
-    for line in parameter_info:
-        for index,element in enumerate(line):
-            try:
-                lengths[index] = max(lengths[index], len(element))
-            except IndexError:
-                lengths.append(len(element))
-    
-    parameter_info.insert(0,OUTPUT_HEADERS)
-    # now display in columns            
-    for line in parameter_info:
-        display_line = '' 
-        for index,element in enumerate(line):
-            display_line += element.ljust(lengths[index]+2,' ')
-        print display_line
+     
+def get_ole_data(filename):
+    data = []
+    try:
+        ole = OleFileIO_PL.OleFileIO(filename)
+        listdir = ole.listdir()
+        for direntry in listdir:            
+            data.append([direntry, ole.openstream(direntry).getvalue()])
+    except:
+        print 'Failed to read streams in file: ' + filename
+    return data
 
 def extract_parameters(filename, rdb_info, args):
     parameter_info=[]
@@ -236,41 +253,31 @@ def extract_parameter_from_stream(parameter,stream):
         ",\"(" + SEL_EXPRESSION + ")\"" + \
         SEL_SETTING_EOL, \
         stream, flags=re.MULTILINE)
-
-def walkabout(p_or_f, file_extension):
-    """ searches through a path p_or_f, picking up all files with EXTN
-    returns these in an array.
-    """
-    return_files = []
-    for root, dirs, files in os.walk(p_or_f, topdown=False):
-        #print files
-        for name in files:
-            if (os.path.basename(name)[-3:]).upper() == file_extension:
-                return_files.append(os.path.join(root,name))
-    return return_files
     
-def return_file_paths(args_path, file_extension):
-    paths_to_work_on = []
-    for p in args_path:
-        p = p.translate(None, ",\"")
-        if not os.path.isabs(p):
-            paths_to_work_on +=  glob.glob(os.path.join(BASE_PATH,p))
-        else:
-            paths_to_work_on += glob.glob(p)
-            
-    files_to_do = []
-    # make a list of files to iterate over
-    if paths_to_work_on != None:
-        for p_or_f in paths_to_work_on:
-            if os.path.isfile(p_or_f) == True:
-                # add file to the list
-                files_to_do.append(os.path.normpath(p_or_f))
-            elif os.path.isdir(p_or_f) == True:
-                # walk about see what we can find
-                files_to_do = walkabout(p_or_f, file_extension)
-    return files_to_do
+def display_info(parameter_info):
+    lengths = []
+    # first pass to determine column widths:
+    for line in parameter_info:
+        for index,element in enumerate(line):
+            try:
+                lengths[index] = max(lengths[index], len(element))
+            except IndexError:
+                lengths.append(len(element))
     
-if __name__ == '__main__':    
+    parameter_info.insert(0,OUTPUT_HEADERS)
+    # now display in columns            
+    for line in parameter_info:
+        display_line = '' 
+        for index,element in enumerate(line):
+            display_line += element.ljust(lengths[index]+2,' ')
+        print display_line
+   
+if __name__ == '__main__':   
     # main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Applied/SNI G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
-    # main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
-    main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T TR')
+    #main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
+    if len(sys.argv) == 1 :
+        main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T G1:TR')
+    else:
+        main()
+    os.system("Pause")
+        
