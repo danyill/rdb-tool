@@ -20,22 +20,29 @@ Installation instructions (for Python *2.7.9*:
  - within Transpower: pip install --proxy="transpower\mulhollandd:password@tptpxy001.transpower.co.nz:8080" tablib    
 
 TODO: 
- - include settinsg which parameter is used in:
-  print "used in: " 
-  print re.findall('^' + SEL_SETTING_NAME + ",\"" + 
+ - unbundle OleFileIO_PL
+ - include settings group which parameter is used in:
+  code like this could be used:
+    print "used in: " 
+    print re.findall('^' + SEL_SETTING_NAME + ",\"" + 
                    SEL_EXPRESSION + sys.argv[1] + SEL_EXPRESSION 
                    + "\"" + SEL_SETTING_EOL, 
                    rdat, flags=re.MULTILINE) 
+ - sorting options on display and dump output?    
+ - sort out guessing of Transpower standard design version 
 """
 
 __author__ = "Daniel Mulholland"
 __copyright__ = "Copyright 2015, Daniel Mulholland"
-__credits__ = ["Whoever wrote pdf-merge, pdftk, ghostscript, python!"]
+__credits__ = ["Decalage http://decalage.info/contact", "Kenneth Reitz https://github.com/kennethreitz/tablib"]
 __license__ = "GPL"
-__version__ = '0.01'
+__version__ = '0.10'
 __maintainer__ = "Daniel Mulholland"
+__hosted__ = "https://github.com/danyill/rdb-tool"
 __email__ = "dan.mulholland@gmail.com"
-__file__ = r'W:\Education\Current\RDB Tool\''
+
+# update this line if using from Python interactive
+#__file__ = r'W:\Education\Current\pytooldev\rdb-tool'
 
 import sys
 import os
@@ -45,12 +52,29 @@ import re
 import tablib
 
 RDB_EXTENSION = 'RDB'
-INPUT_FOLDER = "in"
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
+PARAMETER_SEPARATOR = ':'
 SEL_EXPRESSION = r'[\w :+/\\()!,.\-_\\*]*'
 SEL_SETTING_EOL = r'\x1c\r\n'
 SEL_SETTING_NAME = r'[\w _]*'
 SEL_FID_EXPRESSION='^FID=([\w :+/\\()!,.\-_\\*]*)\r\n'
+OUTPUT_FILE_NAME = "output"
+
+# this probably needs to be expanded
+SEL_FILES_TO_GROUP = {\
+    'G1': ['SET_S1.TXT', 'SET_L1.TXT', 'SET_1.TXT'],\
+    'G2': ['SET_S2.TXT', 'SET_L2.TXT', 'SET_2.TXT'],\
+    'G3': ['SET_S3.TXT', 'SET_L3.TXT', 'SET_3.TXT'],\
+    'G4': ['SET_S4.TXT', 'SET_L4.TXT', 'SET_4.TXT'],\
+    'G5': ['SET_S5.TXT', 'SET_L5.TXT', 'SET_5.TXT'],\
+    'G6': ['SET_S6.TXT', 'SET_L6.TXT', 'SET_6.TXT'],\
+    'P1': ['SET_P1.TXT'],\
+    'P2': ['SET_P2.TXT'],\
+    'P3': ['SET_P3.TXT'],\
+    'P5': ['SET_D5.TXT'],\
+    'P87': ['SET_P87.TXT'],\
+    };
+OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val','FID']
 
 from thirdparty.OleFileIO_PL import OleFileIO_PL
 
@@ -85,23 +109,23 @@ def main(arg=None):
 
     parser.add_argument('-s', '--screen', action="store_true",
                        help='Show output to screen')
-                       
-    parser.add_argument('-d', '--design', action="store_true",
-                       help='Attempt to determine Transpower standard design version and' \
-                       ' include this information in output')
+
+    # Not implemented yet
+    #parser.add_argument('-d', '--design', action="store_true",
+    #                   help='Attempt to determine Transpower standard design version and' \
+    #                   ' include this information in output')
                        
     parser.add_argument('settings', metavar='G:S', type=str, nargs='+',
                        help='Settings in the form of G:S where G is the group'\
-                       ' and S is the SEL variable name. If G: is omitted the default' \
-                       ' group, 1 is selected. Otherwise G should be a comma delimited'\
-                       ' list of groups of interest, or alternatively in the form of ' \
-                       ' a hypenated group. Commas and hyphens can be joined so that ' \
-                       ' a form of 1-2,6 is acceptable. S should be the setting name ' \
+                       ' and S is the SEL variable name. If G: is omitted the search' \
+                       ' goes through all groups. Otherwise G should be the '\
+                       ' group of interest. S should be the setting name ' \
                        ' e.g. OUT201.' \
-                       ' Examples: 1-2,6:50P1P or 1:50P1P or 1,2:50P1P or 50P1P' \
+                       ' Examples: G1:50P1P or G2:50P1P or 50P1P' \
                        ' '\
+                       ' You can also get port settings using P:S'
                        ' Note: Applying a group for a non-grouped setting is unnecessary'\
-                       ' and will not have any affect.')
+                       ' and will prevent you from receiving results.')
 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
 
@@ -131,15 +155,23 @@ def process_rdb_files(files_to_do, args):
     data = tablib.Dataset()    
     for k in parameter_info:
         data.append(k)
-    data.headers = ['File','Name','Setting','RDB','Value','FID']
+    data.headers = OUTPUT_HEADERS
 
+    # don't overwrite existing file
+    name = OUTPUT_FILE_NAME 
+    if args.o == 'csv' or args.o == 'xlsx': 
+        # this is stupid and klunky
+        while os.path.exists(name + '.csv') or os.path.exists(name + '.xlsx'):
+            name += '_'        
+
+    # write data
     if args.o == None:
         pass
     elif args.o == 'csv':
-        with open('output.csv','wb') as output:
+        with open(name + '.csv','wb') as output:
             output.write(data.csv)
     elif args.o == 'xlsx':
-        with open('output.xlsx','wb') as output:
+        with open(name + '.xlsx','wb') as output:
             output.write(data.xlsx)
 
     if args.screen == True:
@@ -155,15 +187,13 @@ def display_info(parameter_info):
             except IndexError:
                 lengths.append(len(element))
     
-    parameter_info.insert(0,['RDB File','Name','Setting File','Setting Name','Val'])
+    parameter_info.insert(0,OUTPUT_HEADERS)
     # now display in columns            
     for line in parameter_info:
         display_line = '' 
         for index,element in enumerate(line):
             display_line += element.ljust(lengths[index]+2,' ')
         print display_line
-
-    # need to add sorting options
 
 def extract_parameters(filename, rdb_info, args):
     parameter_info=[]
@@ -172,7 +202,17 @@ def extract_parameters(filename, rdb_info, args):
             # parameters are always:
             # Relays > Setting Name > Settings Files
             # so length is always at least 3
-            if len(stream[0]) >= 3:
+            category_file_list = None
+            # lookup for group to file to restrict examination
+            if parameter.find(PARAMETER_SEPARATOR) != -1:
+                category_file_list = \
+                    SEL_FILES_TO_GROUP[(parameter.split(PARAMETER_SEPARATOR))[0]]
+                parameter = parameter.split(PARAMETER_SEPARATOR)[1]
+            
+            if len(stream[0]) >= 3 and \
+                    (category_file_list is None \
+                    or stream[0][-1].upper() in category_file_list \
+                    ):
                 return_value = extract_parameter_from_stream(parameter,\
                     stream[1])
                 # print stream
@@ -181,6 +221,7 @@ def extract_parameters(filename, rdb_info, args):
                     filename = os.path.basename(filename)
                     settings_name = str(stream[0][1])
                     stream_name = str(stream[0][-1])
+                    # print stream[0][-1]
                     parameter_info.append([filename, settings_name,\
                         stream_name, parameter, return_value[0], fid[0]])
     return parameter_info
@@ -229,8 +270,7 @@ def return_file_paths(args_path, file_extension):
                 files_to_do = walkabout(p_or_f, file_extension)
     return files_to_do
     
-if __name__ == '__main__':
-    #main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Issued/SNI IN101[?] TR')
-    #main(r'-o xlsx "/media/alexandria/Education/Current/20150430_Stationware_Settings_Issued/SNI/" IN101[?] TR')
-    main(r'-o xlsx "/media/alexandria/Education/Current/20150430_Stationware_Settings_Applied/" TR')
-    #main(r'-o xlsx in IN101[?] TR')
+if __name__ == '__main__':    
+    # main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Applied/SNI G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
+    # main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
+    main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T TR')
