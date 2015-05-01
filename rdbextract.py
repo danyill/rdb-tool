@@ -14,7 +14,7 @@ start('-h') or start('start.rdb G1:50P1P')
 
 Thoughtful ideas most welcome. 
 
-Installation instructions (for Python *2.7.9*:
+Installation instructions (for Python *2.7.9*):
  - pip install tablib
  - or if behind a proxy server: pip install --proxy="user:password@server:port" packagename
  - within Transpower: pip install --proxy="transpower\mulhollandd:password@tptpxy001.transpower.co.nz:8080" tablib    
