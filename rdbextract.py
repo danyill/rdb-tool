@@ -36,7 +36,7 @@ __author__ = "Daniel Mulholland"
 __copyright__ = "Copyright 2015, Daniel Mulholland"
 __credits__ = ["Decalage http://decalage.info/contact", "Kenneth Reitz https://github.com/kennethreitz/tablib"]
 __license__ = "GPL"
-__version__ = '0.10'
+__version__ = '0.11'
 __maintainer__ = "Daniel Mulholland"
 __hosted__ = "https://github.com/danyill/rdb-tool"
 __email__ = "dan.mulholland@gmail.com"
@@ -74,7 +74,7 @@ SEL_FILES_TO_GROUP = {\
     'P5': ['SET_D5.TXT'],\
     'P87': ['SET_P87.TXT'],\
     };
-OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val','FID']
+OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val']
 
 from thirdparty.OleFileIO_PL import OleFileIO_PL
 
@@ -99,6 +99,9 @@ def main(arg=None):
     parser.add_argument('-s', '--screen', action="store_true",
                        help='Show output to screen')
 
+    parser.add_argument('-c', '--columns', action="store_true",
+                       help='Output parameters as columns instead of the default rows')
+
     # Not implemented yet
     #parser.add_argument('-d', '--design', action="store_true",
     #                   help='Attempt to determine Transpower standard design version and' \
@@ -114,7 +117,11 @@ def main(arg=None):
                        ' '\
                        ' You can also get port settings using P:S'
                        ' Note: Applying a group for a non-grouped setting is unnecessary'\
-                       ' and will prevent you from receiving results.')
+                       ' and will prevent you from receiving results.'\
+                       ' Not applying a group for a grouped setting will likely give you'\
+                       ' Group 6 results' \
+                       ' '\
+                       ' Special settings are FID for the FID.')
 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
 
@@ -175,11 +182,30 @@ def process_rdb_files(files_to_do, args):
         extracted_data = extract_parameters(filename, rdb_info, args)
         parameter_info += extracted_data
 
+    # creating tabular data
+    data = tablib.Dataset()            
+        
+    # column instead of row output if required
+    headers = None
+    if args.columns == True: 
+        headers = OUTPUT_HEADERS[:-3]
+        for index, k in enumerate(args.settings):
+            headers.append('Stream ' + str(index+1))
+            headers.append('Setting ' + str(index+1))
+            headers.append(k)
+        data.headers = headers
+    else:
+        headers = OUTPUT_HEADERS
+    
+    print data.headers
+    
+    print len(data.headers)
     # for exporting to Excel or CSV
-    data = tablib.Dataset()    
     for k in parameter_info:
+        print k
+        print len(k)
+        sys.exit()
         data.append(k)
-    data.headers = OUTPUT_HEADERS
 
     # don't overwrite existing file
     name = OUTPUT_FILE_NAME 
@@ -200,7 +226,7 @@ def process_rdb_files(files_to_do, args):
 
     if args.screen == True:
         display_info(parameter_info)
-     
+        
 def get_ole_data(filename):
     data = []
     try:
@@ -214,33 +240,61 @@ def get_ole_data(filename):
 
 def extract_parameters(filename, rdb_info, args):
     parameter_info=[]
-    for stream in rdb_info:
-        for parameter in args.settings:
-            # parameters are always:
-            # Relays > Setting Name > Settings Files
-            # so length is always at least 3
+    results = {}
+    
+    fn = os.path.basename(filename)
+    for parameter in args.settings:
+        return_value = []
+        for stream in rdb_info:
+            settings_name = str(stream[0][1])
+            stream_name = str(stream[0][-1])
+            
             category_file_list = None
             # lookup for group to file to restrict examination
             if parameter.find(PARAMETER_SEPARATOR) != -1:
                 category_file_list = \
                     SEL_FILES_TO_GROUP[(parameter.split(PARAMETER_SEPARATOR))[0]]
-                parameter = parameter.split(PARAMETER_SEPARATOR)[1]
-            
-            if len(stream[0]) >= 3 and \
+                search_parameter = parameter.split(PARAMETER_SEPARATOR)[1]
+            else:
+                search_parameter = parameter
+                
+            # special parameters like e.g. FID
+            if search_parameter == 'FID':
+                fid = extract_fid(stream[1])
+                results[search_parameter] = [settings_name, stream_name, fid]
+
+            # to know we are in the right place in the structure
+            # TODO: need to explain this line a bit better
+            elif len(stream[0]) >= 3 and \
                     (category_file_list is None \
                     or stream[0][-1].upper() in category_file_list \
                     ):
-                return_value = extract_parameter_from_stream(parameter,\
-                    stream[1])
-                # print stream
-                fid = extract_fid(stream[1])
+                return_value = extract_parameter_from_stream(search_parameter,\
+                    stream[1])    
                 if return_value <> []:
-                    filename = os.path.basename(filename)
-                    settings_name = str(stream[0][1])
-                    stream_name = str(stream[0][-1])
-                    # print stream[0][-1]
-                    parameter_info.append([filename, settings_name,\
-                        stream_name, parameter, return_value[0], fid[0]])
+                    if search_parameter not in results:
+                        results[search_parameter] = [[settings_name], [stream_name], [return_value][0]]
+                    else:
+                        results[search_parameter][0] += settings_name
+                        results[search_parameter][1] += stream_name
+                        results[search_parameter][2] += return_value[0]
+
+        # didn't find the parameter, enter an empty string
+        if return_value == []:
+            results[search_parameter] = [[settings_name], [''], ['']]
+    
+    if args.columns == True:
+        parameter_info = [fn]
+        for k in sorted(results.iterkeys()):
+            parameter_info +=([results[k][0], results[k][1], results[k][2]])
+            #print filename, results[k][2], results[k][1], results[k][0][0] 
+        print parameter_info
+        sys.exit()
+    else:
+        pass
+    
+    print parameter_info
+    sys.exit()
     return parameter_info
 
 def extract_fid(stream):
@@ -265,6 +319,7 @@ def display_info(parameter_info):
                 lengths.append(len(element))
     
     parameter_info.insert(0,OUTPUT_HEADERS)
+    
     # now display in columns            
     for line in parameter_info:
         display_line = '' 
@@ -276,7 +331,9 @@ if __name__ == '__main__':
     # main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Applied/SNI G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     #main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     if len(sys.argv) == 1 :
-        main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T G1:TR')
+        # main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T G1:TR')
+        # main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
+        main(r'--columns -o xlsx "in" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')        
     else:
         main()
     os.system("Pause")
