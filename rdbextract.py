@@ -175,6 +175,7 @@ def process_rdb_files(files_to_do, args):
         extracted_data = extract_parameters(filename, rdb_info, args)
         parameter_info += extracted_data
 
+    
     # for exporting to Excel or CSV
     data = tablib.Dataset()    
     for k in parameter_info:
@@ -237,7 +238,7 @@ def extract_parameters(filename, rdb_info, args):
                 if return_value <> []:
                     filename = os.path.basename(filename)
                     settings_name = str(stream[0][1])
-                    stream_name = str(stream[0][-1])
+                    stream_name = (str(stream[0][-1])).upper()
                     # print stream[0][-1]
                     parameter_info.append([filename, settings_name,\
                         stream_name, parameter, return_value[0], fid[0]])
@@ -276,7 +277,7 @@ if __name__ == '__main__':
     # main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Applied/SNI G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     #main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     if len(sys.argv) == 1 :
-        main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T G1:TR')
+        main(r'-o xlsx in G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     else:
         main()
     os.system("Pause")
