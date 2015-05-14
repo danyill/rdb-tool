@@ -30,13 +30,14 @@ TODO:
                    rdat, flags=re.MULTILINE) 
  - sorting options on display and dump output?    
  - sort out guessing of Transpower standard design version 
+ - sort out handling of protection and automation logic in 400 series
 """
 
 __author__ = "Daniel Mulholland"
 __copyright__ = "Copyright 2015, Daniel Mulholland"
 __credits__ = ["Decalage http://decalage.info/contact", "Kenneth Reitz https://github.com/kennethreitz/tablib"]
 __license__ = "GPL"
-__version__ = '0.10'
+__version__ = '0.11'
 __maintainer__ = "Daniel Mulholland"
 __hosted__ = "https://github.com/danyill/rdb-tool"
 __email__ = "dan.mulholland@gmail.com"
@@ -49,16 +50,28 @@ import os
 import argparse
 import glob
 import re
+
 import tablib
+
+from thirdparty.OleFileIO_PL import OleFileIO_PL
 
 RDB_EXTENSION = 'RDB'
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 PARAMETER_SEPARATOR = ':'
+
 SEL_EXPRESSION = r'[\w :+/\\()!,.\-_\\*]*'
 SEL_SETTING_EOL = r'\x1c\r\n'
+# these seem to be the options
+# this needs to be verified
+SEL_SETTING_EOL = r'(\r\n|\x1c\r\n)'
+# presently using this as covers all cases.
+# this seems to work differently to others: SEL-421-4 LineProt Std Rev01.rdb
+SEL_SETTING_EOL = r''
 SEL_SETTING_NAME = r'[\w _]*'
-SEL_FID_EXPRESSION='^FID=([\w :+/\\()!,.\-_\\*]*)\r\n'
+SEL_FID_EXPRESSION='^FID=([\w :+/\\()!,.\-_\\*]{10,})\r\n'
+
 OUTPUT_FILE_NAME = "output"
+NOT_FOUND = 'Not Found'
 
 # this probably needs to be expanded
 SEL_FILES_TO_GROUP = {\
@@ -74,9 +87,7 @@ SEL_FILES_TO_GROUP = {\
     'P5': ['SET_D5.TXT'],\
     'P87': ['SET_P87.TXT'],\
     };
-OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val','FID']
-
-from thirdparty.OleFileIO_PL import OleFileIO_PL
+OUTPUT_HEADERS = ['RDB File','Name','Setting File','Setting Name','Val']
 
 def main(arg=None):
     parser = argparse.ArgumentParser(
@@ -89,22 +100,22 @@ def main(arg=None):
                         help='Produce output as either comma separated values (csv) or as'\
                         ' a Micro$oft Excel .xls spreadsheet. If no output provided then'\
                         ' output is to the screen.')
-
-    parser.add_argument('path', metavar='PATH|FILE', nargs=1, 
+    # ' '.join(opts.dmp) 1 
+    parser.add_argument('path', metavar='PATH|FILE', nargs='+', 
                        help='Go recursively go through path PATH. Redundant if FILE'\
                        ' with extension .rdb is used. When recursively called, only'\
                        ' searches for files with:' +  RDB_EXTENSION + '. Globbing is'\
                        ' allowed with the * and ? characters.')
 
-    parser.add_argument('-s', '--screen', action="store_true",
-                       help='Show output to screen')
+    parser.add_argument('-c', '--console', action="store_true",
+                       help='Show output to console')
 
     # Not implemented yet
     #parser.add_argument('-d', '--design', action="store_true",
     #                   help='Attempt to determine Transpower standard design version and' \
     #                   ' include this information in output')
                        
-    parser.add_argument('settings', metavar='G:S', type=str, nargs='+',
+    parser.add_argument('-s', '--settings', metavar='G:S', type=str, nargs='+',
                        help='Settings in the form of G:S where G is the group'\
                        ' and S is the SEL variable name. If G: is omitted the search' \
                        ' goes through all groups. Otherwise G should be the '\
@@ -114,7 +125,9 @@ def main(arg=None):
                        ' '\
                        ' You can also get port settings using P:S'
                        ' Note: Applying a group for a non-grouped setting is unnecessary'\
-                       ' and will prevent you from receiving results.')
+                       ' and will prevent you from receiving results.'\
+                       ' '\
+                       ' Special arguments include: FID')
 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
 
@@ -123,7 +136,7 @@ def main(arg=None):
     else:
         args = parser.parse_args(arg.split())
     
-    files_to_do = return_file_paths(args.path, RDB_EXTENSION)
+    files_to_do = return_file_paths([' '.join(args.path)], RDB_EXTENSION)
     
     if files_to_do != []:
         process_rdb_files(files_to_do, args)
@@ -140,7 +153,7 @@ def return_file_paths(args_path, file_extension):
             paths_to_work_on +=  glob.glob(os.path.join(BASE_PATH,p))
         else:
             paths_to_work_on += glob.glob(p)
-            
+    
     files_to_do = []
     # make a list of files to iterate over
     if paths_to_work_on != None:
@@ -172,10 +185,10 @@ def process_rdb_files(files_to_do, args):
     for filename in files_to_do:      
         # print filename
         rdb_info = get_ole_data(filename)
-        extracted_data = extract_parameters(filename, rdb_info, args)
-        parameter_info += extracted_data
+        parameter_info += extract_parameters(filename, rdb_info, args)
 
     # for exporting to Excel or CSV
+    #print parameter_info
     data = tablib.Dataset()    
     for k in parameter_info:
         data.append(k)
@@ -198,7 +211,7 @@ def process_rdb_files(files_to_do, args):
         with open(name + '.xlsx','wb') as output:
             output.write(data.xlsx)
 
-    if args.screen == True:
+    if args.console == True:
         display_info(parameter_info)
      
 def get_ole_data(filename):
@@ -213,34 +226,60 @@ def get_ole_data(filename):
     return data
 
 def extract_parameters(filename, rdb_info, args):
+    fn = os.path.basename(filename)
     parameter_info=[]
-    for stream in rdb_info:
-        for parameter in args.settings:
+    
+    parameter_list = []
+    for k in args.settings:
+        parameter_list.append(k.translate(None, '\"'))
+    
+    # iterate across all parameters the user specified
+    for parameter in parameter_list:
+        category_file_list = None
+        search_parameter = ''
+        
+        # is it a parameter associated wtih a group?
+        if parameter.find(PARAMETER_SEPARATOR) != -1:
+            category_file_list = \
+                SEL_FILES_TO_GROUP[(parameter.split(PARAMETER_SEPARATOR))[0]]
+            search_parameter = parameter.split(PARAMETER_SEPARATOR)[1]
+        else:
+            search_parameter = parameter
+        
+        # print search_parameter
+        # iterate over stream in rdb file
+        for stream in rdb_info:
+            return_value = []
+            settings_name = str(stream[0][1])
+            stream_name = str(stream[0][-1]).upper()
+            
+            # lookup for group to file to restrict examination
             # parameters are always:
             # Relays > Setting Name > Settings Files
-            # so length is always at least 3
-            category_file_list = None
-            # lookup for group to file to restrict examination
-            if parameter.find(PARAMETER_SEPARATOR) != -1:
-                category_file_list = \
-                    SEL_FILES_TO_GROUP[(parameter.split(PARAMETER_SEPARATOR))[0]]
-                parameter = parameter.split(PARAMETER_SEPARATOR)[1]
-            
+            # so length is always at least 3                
             if len(stream[0]) >= 3 and \
-                    (category_file_list is None \
-                    or stream[0][-1].upper() in category_file_list \
-                    ):
-                return_value = extract_parameter_from_stream(parameter,\
-                    stream[1])
-                # print stream
-                fid = extract_fid(stream[1])
-                if return_value <> []:
-                    filename = os.path.basename(filename)
-                    settings_name = str(stream[0][1])
-                    stream_name = str(stream[0][-1])
-                    # print stream[0][-1]
-                    parameter_info.append([filename, settings_name,\
-                        stream_name, parameter, return_value[0], fid[0]])
+                (category_file_list == None \
+                or stream[0][-1].upper() in category_file_list):
+                
+                if search_parameter == 'FID':
+                    # special parameters are here
+                    return_value = extract_fid(stream[1])
+                else:
+                    # it's a normal parameter extract as per usual
+                    return_value = extract_parameter_from_stream(search_parameter, \
+                        stream[1])
+                
+            if return_value <> []:
+                # print return_value 
+                # print search_parameter
+                # print category_file_list
+                parameter_info.append([fn, settings_name, \
+                    stream_name, search_parameter, return_value[0]])
+                break   
+     
+        else:
+            parameter_info.append([fn, settings_name,\
+                    "N/A", search_parameter, NOT_FOUND])
     return parameter_info
 
 def extract_fid(stream):
@@ -273,11 +312,12 @@ def display_info(parameter_info):
         print display_line
    
 if __name__ == '__main__':   
-    # main(r'-o xlsx W:/Education/Current/20150430_Stationware_Settings_Applied/SNI G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
-    #main(r'-o xlsx "W:/Education/Current/20150430_Stationware_Settings_Applied/SNI" G1:81D1P G1:81D1T G1:81D2P G1:81D2T G1:TR')
     if len(sys.argv) == 1 :
-        main(r'-o xlsx in 81D1P 81D1T 81D2P 81D2T G1:TR')
+        # main(r'-o xlsx --console "in\SEL-421-4 LineProt Std Rev01.rdb" --settings "RID TID G1:81D1P 81D1T 81D2P 81D2T TR FID"')
+        # main(r'-o xlsx --console "in\SEL-421-4 LineProt Std Rev01.rdb" --settings "TR"')
+        main(r'-o xlsx "in" --settings "RID TID SID G1:81D1P G1:81D1D 81D2P 81D2D TR FID"')
+        #main(r'-o xlsx "in/other/SEL-351S-6-R5 Standard Rev01 (2).rdb" --settings "RID TID SID G1:81D1P G1:81D1T 81D2P 81D2T TR FID"')
     else:
         main()
-    os.system("Pause")
+    raw_input("Press any key to exit...")
         
