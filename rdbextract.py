@@ -37,11 +37,7 @@ __author__ = "Daniel Mulholland"
 __copyright__ = "Copyright 2015, Daniel Mulholland"
 __credits__ = ["Decalage http://decalage.info/contact", "Kenneth Reitz https://github.com/kennethreitz/tablib"]
 __license__ = "GPL"
-<<<<<<< HEAD
-__version__ = '0.12'
-=======
 __version__ = '0.13'
->>>>>>> dev2
 __maintainer__ = "Daniel Mulholland"
 __hosted__ = "https://github.com/danyill/rdb-tool"
 __email__ = "dan.mulholland@gmail.com"
@@ -63,11 +59,7 @@ RDB_EXTENSION = 'RDB'
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
 PARAMETER_SEPARATOR = ':'
 
-<<<<<<< HEAD
-SEL_EXPRESSION = r'[\w :+/\\()!,.\-_\\*]*'
-=======
 SEL_EXPRESSION = r'[\w :+/\\()!,.\-_\\*#]*'
->>>>>>> dev2
 SEL_SETTING_EOL = r'\x1c\r\n'
 # these seem to be the options
 # this needs to be verified
@@ -323,16 +315,14 @@ if __name__ == '__main__':
     if len(sys.argv) == 1 :
         # main(r'-o xlsx --console "in\SEL-421-4 LineProt Std Rev01.rdb" --settings "RID TID G1:81D1P 81D1T 81D2P 81D2T TR FID"')
         # main(r'-o xlsx --console "in\SEL-421-4 LineProt Std Rev01.rdb" --settings "TR"')
-<<<<<<< HEAD
         #main(r'-o xlsx "in/other/SEL-351S-6-R5 Standard Rev01 (2).rdb" --settings "RID TID SID G1:81D1P G1:81D1T 81D2P 81D2T TR FID"')
-        main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\SI" --settings "RID TID SID G1:81D1P G1:81D1D 81D2P 81D2D TR FID"')
-=======
+        # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\SI" --settings "RID TID SID G1:81D1P G1:81D1D 81D2P 81D2D TR FID"')
         # main(r'-o xlsx "in/other/SEL-351S-6-R5 Standard Rev01 (2).rdb" --settings "RID TID SID G1:81D1P G1:81D1T 81D2P 81D2T TR FID"')
         # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\SI" --settings "RID TID SID G1:81D1P G1:81D1D 81D2P 81D2D TR FID"')
         # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\" --settings "RID TID G1:51P1P G1:51P1TD G1:51P1C TR FID"')
         # W:\Education\Current\Stationware Dump
         main(r'-o xlsx "W:\Education\Current\Stationware Dump\" --settings "RID TID G1:51P1P G1:51P1TD G1:51P1C TR FID"')
->>>>>>> dev2
+
     else:
         main()
     raw_input("Press any key to exit...")
