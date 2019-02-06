@@ -210,7 +210,7 @@ def countElementsUsed(eqn):
     Can handle the use of functions
     """
     elements = getLineComponents(eqn, keepNumbers=True, uniqueOnly=False)
-    functions = re.findall(RDBOperatorsConst.FUNCTIONS, e)
+    functions = re.findall(RDBOperatorsConst.FUNCTIONS, eqn)
     return len(elements[0]) + len(functions)
 
 def get_logic_usage(ltext):
