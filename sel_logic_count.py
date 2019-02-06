@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+"""
+
+This tool simply counts logic used and spare logic and the number of elements used in a SELogic equation.
+
+"""
+
+
 import re
 
 from named_constants import Constants
@@ -8,7 +15,7 @@ from intervals import get_interval_range, provide_string_range
 
 class RDBOperatorsConst(Constants):
     """
-    Information on variable types for SEL-400 series logic and
+    Information on variable types for ""SEL-400 series logic and
     regexes for processing of equations
     """
     TYPES = {'PSV': ['PSVxx'],
