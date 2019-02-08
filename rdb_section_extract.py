@@ -6,10 +6,13 @@ This tool extracts a pile of settings based on the hierachy of Quickset
 
 """
 
+import collections
 import os
 import re
 
 import olefile
+
+import sel_logic_count
 
 # this probably needs to be expanded
 SEL_FILES_TO_GROUP = {
@@ -92,20 +95,115 @@ def extract_parameters(filename, rdb_info, txtfile):
 
         if stream_name in SEL_FILES_TO_GROUP[txtfile]:
 
-            print(stream_name, settings_name)
-            return stream[1].decode('utf-8')
+            #print(stream_name, settings_name)
+            return [settings_name, stream[1].decode('utf-8')]
 
-def get_stream_parameter(parameter, text):
+def get_sel_setting(text):
     setting_expression = re.compile(r'^([A-Z0-9_]+),\"(.*)\"(?:\r\n|\x1c\r\n)', flags=re.MULTILINE)
     return re.findall(setting_expression, text)
 
-if __name__ == '__main__':
-    output = process_file('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'F1')
 
-    k = get_stream_parameter('',output)
+def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
+    """
+    d is a dictionary with the group number as the key
+    and the protection logic as the values
+    This is processed and an Asciidoc table is produced
+    """
+
+    columns = 4*len(d) + 1
+
+    # get logic report
+    raw_results = collections.OrderedDict()
+    for k, v in d.items():
+        raw_results[k] = sel_logic_count.calc_usage_raw(v)
+
+    line_info = ['Lines Used (w/ comment lines)', 'Lines Used (w/o comment lines)']
+
+    logic_info = [ 'PSV', 'PMV', 'PLT', 'PCT', 'PST', 'PCN',
+                   'ASV', 'AMV', 'ALT',        'AST', 'ACN']
+
+    table_data = []
+
+    for row_name in line_info + logic_info:
+
+        table_row = [row_name]
+
+        for k, v in raw_results.items():
+            table_row.append(v[row_name])
+
+        table_data.append(table_row)
+
+    no_groups = len(d)
+    info = []
+
+    info.append('[#overall_logic_usage]')
+
+    if settings_name:
+        keys = ', '.join([str(ky) for ky in d.keys()])
+        info.append('.`{}` Logic Usage in Setting Groups {}'.format(settings_name.upper(), keys))
+
+    info.append('[cols="1*<.^,{}"]'.format(','.join(['1*>.^,1*^.^,1*>.^'] * no_groups)))
+    
+    info.append('|===')
+
+    info.append('h|')
+    for group in d.keys():
+        info.append('3+^.^h| '.format(no_groups) +
+                    '{} {}'.format(group_title, group))
+
+    for k in table_data:
+        if k[0] in line_info:
+            pr = ('h| {}').format(k[0]).ljust(50)
+            for gd in k[1:]:
+                pr += '3+^.^| {} '.format(gd)
+            info.append(pr)
+
+    info.append('')
+    info.append('h| Variable ' +
+                ' '.join(['h| Used h| Free % h| Available']*no_groups))
+    info.append('')
+
+    for k in table_data:
+        if k[0] in logic_info:
+            pr = ('h| `{}`'.format(k[0])).ljust(13)
+            for gd in k[1:]:
+                fstr = '| {:>12} | {:<7.0%} | {:<30}'
+                pr += fstr.format('{} / {}'.format(gd['qty'], gd['total']),
+                                  gd['free_pu'],
+                                  '[small]#{}#'.format(gd['available_detail']))
+            info.append(pr)
+
+
+    info.append('|===')
+
+    return('\n'.join(info))
+
+def plogic_used(filename, group_prefix, *nums):
+
+    logics = {}
+    for num in nums:
+        [settings_name, output] = process_file(filename , 'L'+str(num))
+        lines = get_sel_setting(output)
+        result = []
+        for settings in lines:
+            result.append(settings[1])
+        logic_text = "\n".join(result)
+        logics[num] = logic_text
+
+    if len(nums) == 1:
+        return sel_logic_count.calc_logic_usage(logics[nums[0]])
+    else:
+        return sum_logic_usage_multiple_groups(logics, group_prefix, settings_name)
+
+if __name__ == '__main__':
+
+
+    """
+    output = process_file('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'L1')
+
+    k = get_sel_setting(output)
     result = []
 
-    import sel_logic_count
 
     for item in k:
         val = item[1]
@@ -117,9 +215,25 @@ if __name__ == '__main__':
     print(result)
 
     for k in result:
-        #print('x', k)
+    #   print('x', k)
         print(int((k.split('|'))[0].strip()), k)
+    """
 
+    """output = process_file('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'L1')
 
+     #k = get_stream_parameter('',output)
+    k = get_sel_setting(output)
+    result = []
+    for val in k:
+        result.append(val[1])
+    logic_text = "\n".join(result)
+
+    print(sel_logic_count.calc_logic_usage(logic_text))"""
+
+    #plogic_used('/home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/SEL-487E-3.rdb', 1)
+
+    print(plogic_used('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'Application', 1, 6))
+
+    # /home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/
 
     #str = [x(0) + ':=' + x(1) for x in k]
