@@ -306,9 +306,9 @@ def calc_usage_raw(logic_texts):
     Where Numbers also count
     """
 
-    usage_sum ={}
+    usage_sum = {}
 
-    r = get_logic_usage(logic_text)
+    r = get_logic_usage(logic_texts)
     [usage_info, logic_used, residue] = r
 
     usage_sum['Lines Used (w/ comment lines)'] = usage_info['LINES']
@@ -589,13 +589,14 @@ PSV38 := ((APP_SEL = 1.000000 OR APP_SEL = 6.000000) AND 591P1T) OR (APP_SEL = 3
 """
 
 if __name__ == "__main__":
-    calc_logic_usage(logic_text)
+    pass
+    #calc_logic_usage(logic_text)
     #print(calc_usage_raw(logic_text))
-    e = "PSVxx = (PHA_U AND TRIPU) OR ((PMV63 = 3 OR PMV63 = 5) PHA_W AND TRIPW)"
-    e2 = "(PSV44 OR PSV45 OR ((PMV64 = 2.000000 OR PMV64 = 4.000000 OR PMV64 = 5.000000) AND REF50T1)) AND R_TRIG TRIP # GROUND FAULT"
+    #e = "PSVxx = (PHA_U AND TRIPU) OR ((PMV63 = 3 OR PMV63 = 5) PHA_W AND TRIPW)"
+    #e2 = "(PSV44 OR PSV45 OR ((PMV64 = 2.000000 OR PMV64 = 4.000000 OR PMV64 = 5.000000) AND REF50T1)) AND R_TRIG TRIP # GROUND FAULT"
 
-    print(countElementsUsed(e))
-    print(countElementsUsed(e2))
+    #print(countElementsUsed(e))
+    #print(countElementsUsed(e2))
     
     #calc_logic_usage(e)
     #print(len(getLineComponents(e, keepNumbers=True)[0][1]))

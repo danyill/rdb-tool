@@ -74,19 +74,19 @@ def process_file(filepath, args):
     rdb_info = get_ole_data(filepath)
     return extract_parameters(filepath, rdb_info, args)
 
-def get_ole_data(filename):
+def get_ole_data(filepath):
     data = []
     try:
-        ole = olefile.OleFileIO(filename)
+        ole = olefile.OleFileIO(filepath)
         listdir = ole.listdir()
         for direntry in listdir:
             data.append([direntry, ole.openstream(direntry).getvalue()])
     except:
-        print('Failed to read streams in file: ' + filename)
+        print('Failed to read streams in file: ' + filepath)
     return data
 
-def extract_parameters(filename, rdb_info, txtfile):
-    fn = os.path.basename(filename)
+def extract_parameters(filepath, rdb_info, txtfile):
+    fn = os.path.basename(filepath)
     parameter_info=[]
 
     for stream in rdb_info:
@@ -101,7 +101,6 @@ def extract_parameters(filename, rdb_info, txtfile):
 def get_sel_setting(text):
     setting_expression = re.compile(r'^([A-Z0-9_]+),\"(.*)\"(?:\r\n|\x1c\r\n)', flags=re.MULTILINE)
     return re.findall(setting_expression, text)
-
 
 def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
     """
@@ -122,6 +121,8 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
     logic_info = [ 'PSV', 'PMV', 'PLT', 'PCT', 'PST', 'PCN',
                    'ASV', 'AMV', 'ALT',        'AST', 'ACN']
 
+    TOTAL_SEL_PROTECTION_LINES = 250
+
     table_data = []
 
     for row_name in line_info + logic_info:
@@ -136,27 +137,45 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
     no_groups = len(d)
     info = []
 
+    #  Anchor
     info.append('[#overall_logic_usage]')
 
+    # Title
     if settings_name:
         keys = ', '.join([str(ky) for ky in d.keys()])
         info.append('.`{}` Logic Usage in Setting Groups {}'.format(settings_name.upper(), keys))
 
+    # Column Definitions
     info.append('[cols="1*<.^,{}"]'.format(','.join(['1*>.^,1*^.^,1*>.^'] * no_groups)))
-    
+
     info.append('|===')
 
+    # Group Title
     info.append('h|')
     for group in d.keys():
         info.append('3+^.^h| '.format(no_groups) +
                     '{} {}'.format(group_title, group))
 
+    info.append('')
+
+    # Overall line information
     for k in table_data:
         if k[0] in line_info:
             pr = ('h| {}').format(k[0]).ljust(50)
             for gd in k[1:]:
-                pr += '3+^.^| {} '.format(gd)
+                pr += '3+^.^| {} / {} '.format(gd, TOTAL_SEL_PROTECTION_LINES).ljust(20)
             info.append(pr)
+
+    info.append('')
+
+    # Capacity free from relay STA S command
+    sta_s_info = ['Free protection settings capacity (%)', 'Free protection execution capacity (%)']
+
+    for s in sta_s_info:
+        pr = ('h| {} ').format(s).ljust(50)
+        for gd in k[1:]:
+            pr += '3+^.^| ??? '.ljust(20)
+        info.append(pr)
 
     info.append('')
     info.append('h| Variable ' +
@@ -173,16 +192,16 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
                                   '[small]#{}#'.format(gd['available_detail']))
             info.append(pr)
 
-
     info.append('|===')
 
     return('\n'.join(info))
 
-def plogic_used(filename, group_prefix, *nums):
+def plogic_used(filepath, group_prefix, *nums):
 
     logics = {}
     for num in nums:
-        [settings_name, output] = process_file(filename , 'L'+str(num))
+        print(filepath,num)
+        [settings_name, output] = process_file(filepath, 'L'+str(num))
         lines = get_sel_setting(output)
         result = []
         for settings in lines:
@@ -232,8 +251,7 @@ if __name__ == '__main__':
 
     #plogic_used('/home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/SEL-487E-3.rdb', 1)
 
-    print(plogic_used('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'Application', 1, 6))
+    path = '/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb'
+    #path = '/home/mulhollandd/Downloads/junk/SEL-487E-3.rdb'
+    print(plogic_used(path, 'Application', 1, 6))
 
-    # /home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/
-
-    #str = [x(0) + ':=' + x(1) for x in k]
