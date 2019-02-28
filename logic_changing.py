@@ -103,6 +103,15 @@ class LogicLines:
     def deleteLineByIndex(self, n):
         del self.lines[n]
 
+    def getDefinitions(self, df):
+        result = []
+        for l in self.lines:
+            dfn = l.raw_text.split(':=')[0].strip()
+            print(dfn)
+            if dfn == df:
+                result.append(l)
+        return result
+
     def replace(self, first, second):
         replacements = []
         for l in self.lines:
@@ -204,6 +213,7 @@ class LogicManipulator:
         else:
             items = sel_logic_count.make_limits(e)
 
+        # this might just be generic changes
         result = {}
         for var_to_change in items:
             things_to_change = sel_logic_functions.change_type_vals(var_to_change, to)
@@ -216,7 +226,7 @@ class LogicManipulator:
                     result[c] = lchange 
         return result
 
-    def convert_timer(e, from_type, to_type):
+    def convert_timer(self, e, from_type, to_type):
         """
         from_type --> to_type
         PCT           PST
@@ -224,7 +234,22 @@ class LogicManipulator:
         PCT           AST
         AST           PCT
         """
-        pass
+        if from_type == 'PCT' and to_type == 'AST':
+            vals = sel_logic_functions.getInstVals(e)
+            pu = [x for x in vals if x.endswith('PU')][0]
+            do = [x for x in vals if x.endswith('DO')][0]
+            inp = [x for x in vals if x.endswith('IN')][0]
+            
+            pu_def = self.l.getDefinitions(pu)[0]
+            do_def = self.l.getDefinitions(do)[0]
+            in_def = self.l.getDefinitions(inp)[0]
+
+            pu_time = float(pu_def.raw_text.split(':=')[1].strip())
+            do_time = float(do_def.raw_text.split(':=')[1].strip())
+            in_val = in_def.raw_text.split(':=')[1].strip()
+            print(pu_def.getLine(), pu_def,  pu_time)
+            print(do_def.getLine(), do_def, do_time)
+            print(in_val)
 
     def reorder(type,start, exclude):
         """
@@ -260,14 +285,14 @@ print()
 
 
 print(l.l.pretty_print())
-print(l.change_type('PLT','a')) # PLT15 PLT05-15 PLT5-15 result output
-print(l.change_type('PCT','a')) # PLT15 PLT05-15 PLT5-15 result output
-print(l.change_type('PSV','a')) # PLT15 PLT05-15 PLT5-15 result output
-print(l.change_type('PMV','a')) # PLT15 PLT05-15 PLT5-15 result output
+#print(l.change_type('PLT','a')) # PLT15 PLT05-15 PLT5-15 result output
+#print(l.change_type('PCT','a')) # PLT15 PLT05-15 PLT5-15 result output
+#print(l.change_type('PSV','a')) # PLT15 PLT05-15 PLT5-15 result output
+#print(l.change_type('PMV','a')) # PLT15 PLT05-15 PLT5-15 result output
+l.convert_timer('PCT18', 'PCT', 'AST')
 
 
-
-print(l.l.pretty_print())
+#print(l.l.pretty_print())
 
 
 """def do_replacement(data, subs, callouts=False):
