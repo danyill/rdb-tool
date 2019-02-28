@@ -24,7 +24,7 @@ class RDBOperatorsConst(Constants):
              'PCT': ['PCTxx$IN$', 'PCTxx$PU$', 'PCTxx$DO$', 'PCTxx$Q$'],
              'PST': ['PSTxx$IN$', 'PSTxx$PT$', 'PSTxx$R$', 'PSTxx$ET$', 'PSTxx$Q$'],
              'PCN': ['PCNxx$IN$', 'PCNxx$PV$', 'PCNxx$R$', 'PCNxx$CV$', 'PCNxx$Q$'],
-             'ASV': ['ASVxx'],
+             'ASV': ['ASVxxx'],
              'AMV': ['AMVxxx'],
              'ALT': ['ALTxx$S$', 'ALTxx$R$', 'ALTxx'],
              'AST': ['ASTxx$IN$', 'ASTxx$PT$', 'ASTxx$R$', 'ASTxx$ET$', 'ASTxx$Q$'],
@@ -275,14 +275,26 @@ def make_limits(name, min=False, max=False):
         max_chars = str(len(str(lims[1])))
         return [name + ('{:0>' + max_chars + '}').format(str(r)) for r in rng]
 
-def find_unused_logic(type, used):
+def find_unused_logic(type, used, provideRaw=False, lowestAllowed=None, highestAllowed=None):
+    # TODO: FIXME: lowestAllowed only works with provideRaw
     full_list = make_limits(type)
     if full_list != None:
         unused = [l for l in full_list if l not in used]
         regex_only_numbers = re.compile(r'^' + type)
         only_numbers = [int(re.sub(regex_only_numbers,'',val)) for val in unused]
         rng = get_interval_range(only_numbers)
-        return provide_string_range(rng)
+
+        if provideRaw == False:
+            return provide_string_range(rng)
+        else:
+            if lowestAllowed and not highestAllowed:
+                return [u for u in unused if int(re.findall(r'[A-Z]+([0-9]+)[A-Z]*', u)[0]) >= lowestAllowed]
+            elif not lowestAllowed and highestAllowed:
+                return [u for u in unused if int(re.findall(r'[A-Z]+([0-9]+)[A-Z]*', u)[0]) <= highestAllowed]
+            elif lowestAllowed and highestAllowed:
+                return [u for u in unused if lowestAllowed <= int(re.findall(r'[A-Z]+([0-9]+)[A-Z]*', u)[0]) <= highestAllowed]
+            else:
+                return unused
     else:
         return ''
 

@@ -19,8 +19,11 @@ def change_type_vals(e, to):
     newVals = []
     if to.lower() in ['p', 'prot', 'protection']:
         newVals = ['P' + n[1:] for n in valsToChange]
+        # TODO: Update to handle moving from the many AMV/ASVs to the few PMV/PSVs
     elif to.lower() in ['a', 'auto', 'automation']:
         newVals = ['A' + n[1:] for n in valsToChange]
+        newVals = [n[0:3] + '0' + n[3:] for n in newVals if n[0:3] in ['ASV','AMV']]
+        print(newVals)
     else:
         print("Error")
 
