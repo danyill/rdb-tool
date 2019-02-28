@@ -216,9 +216,10 @@ def plogic_used(filepath, group_prefix, *nums):
 
 if __name__ == '__main__':
 
-
     """
-    output = process_file('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'L1')
+    path = r'F:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
+    output = process_file(path, 'F1')
+
 
     k = get_sel_setting(output)
     result = []
@@ -236,6 +237,7 @@ if __name__ == '__main__':
     for k in result:
     #   print('x', k)
         print(int((k.split('|'))[0].strip()), k)
+
     """
 
     """output = process_file('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb', 'L1')
@@ -251,7 +253,9 @@ if __name__ == '__main__':
 
     #plogic_used('/home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/SEL-487E-3.rdb', 1)
 
+    
     path = '/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb'
+    #path = r'G:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
     #path = '/home/mulhollandd/Downloads/junk/SEL-487E-3.rdb'
-    print(plogic_used(path, 'Application', 1, 6))
-
+    print(plogic_used(path, 'Application', 1,2))
+    

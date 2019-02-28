@@ -282,22 +282,25 @@ def calc_logic_usage(logic_text):
     Just I think a calculation of the number of "residual elements"
     Where Numbers also count
     """
+    returnval = ''
     r = get_logic_usage(logic_text)
     [usage_info, logic_used, residue] = r
 
-    print('Lines Used (w/ comment lines):', str(usage_info['LINES']))
-    print('Lines Used (w/o comment lines):', str(usage_info['LINES_UNCOMMENTED']))
+    returnval += 'Lines Used (w/ comment lines):  ' + str(usage_info['LINES']) + '\n'
+    returnval += 'Lines Used (w/o comment lines): ' + str(usage_info['LINES_UNCOMMENTED']) + '\n'
 
     del usage_info['LINES']
     del usage_info['LINES_UNCOMMENTED']
  
     for operator_type, used_qty in usage_info.items():
         total = RDBOperatorsConst.LIMITS[operator_type][1]
-        print(operator_type,
+        returnval += ' '.join([operator_type,
               'Used:', '{:>3}'.format(used_qty),
               '/' ' {:<4}'.format(RDBOperatorsConst.LIMITS[operator_type][1]), 
               'Unused: {:<4.0%}   Available: '.format(1-int(used_qty)/total) + 
-              find_unused_logic(operator_type, logic_used))
+              find_unused_logic(operator_type, logic_used), '\n'])
+    
+    return returnval
 
 def calc_usage_raw(logic_texts):
     """
@@ -588,15 +591,78 @@ PSV38 := ((APP_SEL = 1.000000 OR APP_SEL = 6.000000) AND 591P1T) OR (APP_SEL = 3
 
 """
 
+logic_text_2 = """
+## ## AUTO RECLOSE LOGIC. CONSULT WITH TRANSPOWER BEFORE USING ## ##
+# TIMER SETTINGS
+C79OI1 := 250.000000 # HV CB OPEN INTERVAL
+C79OI2 := 750.000000 # LV CB OPEN INTERVAL
+C79RCD := 750.000000 # AUTO RECLOSE RECLAIM TIME
+C79MRCD := 500.000000 # MANUAL CLOSE RECLAIM TIME
+C79CLSD := 50.000000 # AUTO RECLOSE CLOSE SUPERVISION TIME
+C79CFD := 9.000000 # CLOSE FAILURE TIME
+# LOGIC SETTINGS
+C79RI := IN106 # AUTO RECLOSE INITIATE
+C79RIS := 52CLS AND 52CLU AND PLT15 # RECLOSER INITIATE SUPERVISION
+C79DTL := TRIP OR IN107 OR IN201 # DRIVE TO LOCKOUT CONDITIONS
+C79CLS1 := 594P1 # HV CLOSE SUPERVISION CONDITION
+C79CLS2 := 595P1 # LV CLOSE SUPERVISION CONDITION
+#
+# FIXED AUTO RECLOSE LOGIC PAST THIS POINT. DO NOT MODIFY #
+C3POTX := NOT (52CLS AND 52CLU) # THREE POLE OPEN FOR BOTH TRANSFORMER BREAKERS
+PLT15S := R_TRIG RB16
+PLT15R := R_TRIG RB15
+PCT16PU := 0.000000 # HV CB OPEN INTERVAL TIMER
+PCT16DO := C79OI1
+PCT16IN := PLT21 AND R_TRIG C3POTX
+PCT17PU := 0.000000 # LV CB OPEN INTERVAL TIMER
+PCT17DO := C79OI2
+PCT17IN := PLT21 AND R_TRIG C3POTX
+PCT18PU := 0.000000 # RECLOSE INITIATE SUPERVISION TIMER.
+PCT18DO := 15.000000
+PCT18IN := R_TRIG PLT21
+PCT19PU := 0.000000 # AUTO RECLOSE RECLAIM TIMER
+PCT19DO := C79RCD
+PCT19IN := PLT21 AND R_TRIG 52CLU
+PCT20PU := C79MRCD # MANUAL RECLAIM TIMER
+PCT20DO := 0.000000
+PCT20IN := PLT22 AND NOT C79DTL AND C79RIS
+PCT21PU := C79CFD # CB CLOSE FAILURE TIMER
+PCT21DO := 1.000000
+PCT21IN := PLT15 AND (PCT05Q AND NOT 52CLS OR PCT07Q AND NOT 52CLU)
+PCT22PU := C79CLSD # HV CLOSE SUPERVISION TIMER
+PCT22DO := 0.000000
+PCT22IN := PLT23
+PCT23PU := C79CLSD # LV CLOSE SUPERVISION TIMER
+PCT23DO := 0.000000
+PCT23IN := PLT24
+# RESET STATE #
+PLT20S := PLT22 AND R_TRIG PCT20Q OR PLT21 AND F_TRIG PCT19Q
+PLT20R := R_TRIG PLT21 OR R_TRIG PLT22
+# CYCLE STATE #
+PLT21S := PLT20 AND C79RI AND C79RIS
+PLT21R := R_TRIG PLT20 OR R_TRIG PLT22
+# LOCKOUT STATE #
+PLT22S := C79DTL OR (PLT20 AND F_TRIG C79RIS) OR (F_TRIG PCT18Q AND NOT C3POTX) OR PCT21Q OR PCT22Q OR PCT23Q OR F_TRIG PLT15 OR PFRTEX
+PLT22R := R_TRIG PCT20Q
+# AUTO RECLOSE CLOSE COMMANDS #
+PLT23S := F_TRIG PCT16Q AND NOT C79CLS1 # HV RECLOSE SUPERVISION
+PLT23R := R_TRIG C79CLS1 OR R_TRIG PCT22Q
+PSV33 := (PLT21 AND F_TRIG PCT16Q AND C79CLS1) OR (PLT21 AND PLT23 AND R_TRIG C79CLS1) # HV CB CLOSE COMMAND
+PLT24S := F_TRIG PCT17Q AND NOT C79CLS2 # LV RECLOSE SUPERVISION
+PLT24R := R_TRIG C79CLS2 OR R_TRIG PCT23Q
+PSV34 := (PLT21 AND F_TRIG PCT17Q AND C79CLS2) OR (PLT21 AND PLT24 AND R_TRIG C79CLS2) # LV CB CLOSE COMMAND
+## END OF AUTO RECLOSE LOGIC ##
+"""
+
 if __name__ == "__main__":
-    pass
-    #calc_logic_usage(logic_text)
-    #print(calc_usage_raw(logic_text))
+    #pass
+    calc_logic_usage(logic_text_2)
+    print(calc_usage_raw(logic_text_2))
     #e = "PSVxx = (PHA_U AND TRIPU) OR ((PMV63 = 3 OR PMV63 = 5) PHA_W AND TRIPW)"
-    #e2 = "(PSV44 OR PSV45 OR ((PMV64 = 2.000000 OR PMV64 = 4.000000 OR PMV64 = 5.000000) AND REF50T1)) AND R_TRIG TRIP # GROUND FAULT"
+    e2 = "(PSV44 OR PSV45 OR ((PMV64 = 2.000000 OR PMV64 = 4.000000 OR PMV64 = 5.000000) AND REF50T1)) AND R_TRIG TRIP # GROUND FAULT"
 
     #print(countElementsUsed(e))
-    #print(countElementsUsed(e2))
+    print(countElementsUsed(e2))
     
     #calc_logic_usage(e)
     #print(len(getLineComponents(e, keepNumbers=True)[0][1]))
