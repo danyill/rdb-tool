@@ -10,5 +10,18 @@ def getInstVals(name):
     num = name[3:]   #     and a value which is the remainder
 
     type_inst = sel_logic_count.RDBOperatorsConst.TYPES[type]
-    types = [e.replace('xx', num).replace('$','') for e in type_inst]
+    types = [e.replace('xx', num).replace('$', '') for e in type_inst]
     return types
+
+def change_type_vals(e, to):
+    valsToChange = getInstVals(e)
+    
+    newVals = []
+    if to.lower() in ['p', 'prot', 'protection']:
+        newVals = ['P' + n[1:] for n in valsToChange]
+    elif to.lower() in ['a', 'auto', 'automation']:
+        newVals = ['A' + n[1:] for n in valsToChange]
+    else:
+        print("Error")
+
+    return [valsToChange, newVals]    

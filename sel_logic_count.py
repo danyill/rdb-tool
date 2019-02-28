@@ -20,13 +20,13 @@ class RDBOperatorsConst(Constants):
     """
     TYPES = {'PSV': ['PSVxx'],
              'PMV': ['PMVxx'],
-             'PLT': ['PLTxx$S$', 'PLTxx$R$'],
+             'PLT': ['PLTxx$S$', 'PLTxx$R$', 'PLTxx'],
              'PCT': ['PCTxx$IN$', 'PCTxx$PU$', 'PCTxx$DO$', 'PCTxx$Q$'],
              'PST': ['PSTxx$IN$', 'PSTxx$PT$', 'PSTxx$R$', 'PSTxx$ET$', 'PSTxx$Q$'],
              'PCN': ['PCNxx$IN$', 'PCNxx$PV$', 'PCNxx$R$', 'PCNxx$CV$', 'PCNxx$Q$'],
              'ASV': ['ASVxx'],
              'AMV': ['AMVxxx'],
-             'ALT': ['ALTxx$S$', 'ALTxx$R$'],
+             'ALT': ['ALTxx$S$', 'ALTxx$R$', 'ALTxx'],
              'AST': ['ASTxx$IN$', 'ASTxx$PT$', 'ASTxx$R$', 'ASTxx$ET$', 'ASTxx$Q$'],
              'ACN': ['ACNxx$IN$', 'ACNxx$PV$', 'ACNxx$R$', 'ACNxx$CV$', 'ACNxx$Q$']
             }
@@ -254,14 +254,24 @@ def get_logic_usage(ltext):
 
     return [results, logic_elements, residual_elements]
 
-def make_limits(name):
+def make_limits(name, min=False, max=False):
     """
     for a given variable, e.g. PSV return a full list
     within capability of SEL-400 series logic
     """
     if name in RDBOperatorsConst.LIMITS:
-        lims = RDBOperatorsConst.LIMITS[name]
+        
+        if min and not max:
+            lims = list(range(min, RDBOperatorsConst.LIMITS[name][1]+1))
+        elif max and not min:
+            lims = list(range(RDBOperatorsConst.LIMITS[name][0]+1,max))
+        elif min and max:
+            lims = [min, max]
+        else:
+            lims = RDBOperatorsConst.LIMITS[name]
+        
         rng = list(range(lims[0], lims[1]+1))
+
         max_chars = str(len(str(lims[1])))
         return [name + ('{:0>' + max_chars + '}').format(str(r)) for r in rng]
 

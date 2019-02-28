@@ -10,6 +10,7 @@ import re
 
 from colorama import Fore, Back, Style
 
+import helpers
 import sel_logic_count
 import sel_logic_functions
 
@@ -82,7 +83,7 @@ class LogicLines:
         self.text = text
         self.lines = []
         self.makeLines()
-        
+
     def makeLines(self):
         all_lines = (self.text.strip()).split('\n')
         for idx, l in enumerate(all_lines):
@@ -101,6 +102,14 @@ class LogicLines:
 
     def deleteLineByIndex(self, n):
         del self.lines[n]
+
+    def replace(self, first, second):
+        replacements = []
+        for l in self.lines:
+            result = l.replace(first, second)
+            if result:
+                replacements.append(l.getLine())
+        return replacements
 
     def pretty_print(self):
         line_text = ''
@@ -122,8 +131,8 @@ class LogicLines:
         for l in self.lines:
             line_text += str(l) + '\n'
 
-        return line_text 
-                
+        return line_text
+
 class Line:
     """ an SEL logic line """
 
@@ -142,19 +151,30 @@ class Line:
     def getLine(self):
         return self.parent.lines.index(self)
 
+    def replace(self, first, second, dummyRun=False, etype='equation',):
+        new = None
+        old = self.raw_text
+        if etype == 'equation':
+            new = self.raw_text.replace(first, second)
+            if not dummyRun:
+                self.raw_text = new
+            return old != new
+        else:
+            print('Error!')
+
     def pretty_print(self):
         if self.type == 'comment':
             return '{:<8}        {}'.format(Fore.BLUE + str(self.getLine()),
-                                         Fore.RESET + self.raw_text.strip() + 
-                                         Fore.GREEN + Style.DIM + self.comment +
-                                         Fore.RESET + Style.RESET_ALL)
+                                            Fore.RESET + self.raw_text.strip() +
+                                            Fore.GREEN + Style.DIM + self.comment +
+                                            Fore.RESET + Style.RESET_ALL)
         else:
             elems = sel_logic_count.countElementsUsed(self.text) - 1
-            return '{:<8} {:>8}    {}'.format(Fore.BLUE + str(self.getLine()), 
-                                           Fore.LIGHTCYAN_EX + str(elems), 
-                                           Fore.WHITE + self.raw_text +
-                                           Fore.GREEN + Style.DIM + ' ' + self.comment +
-                                           Fore.RESET + Style.RESET_ALL)
+            return '{:<8} {:>8}    {}'.format(Fore.BLUE + str(self.getLine()),
+                                              Fore.LIGHTCYAN_EX + str(elems),
+                                              Fore.WHITE + self.raw_text +
+                                              Fore.GREEN + Style.DIM + ' ' + self.comment +
+                                              Fore.RESET + Style.RESET_ALL)
 
     def __str__(self):
         if len(self.raw_text) > 0:
@@ -168,23 +188,33 @@ class LogicManipulator:
         self.l = LogicLines(logic)
 
     def change_type(self, e, to):
-        valsToChange = sel_logic_functions.getInstVals('PLT13')
-        
-        newVals = []
-        if to.lower() in ['p', 'prot', 'protection']:
-            newVals = ['P' + n[1:] for n in valsToChange]
-        elif to.lower() in ['a', 'auto', 'automation']:
-            newVals = ['A' + n[1:] for n in valsToChange]
+
+        find_lots = re.compile(r'^([A-Z]+)([0-9]{1,3})-([0-9]{1,3})$')
+        find_digits = helpers.hasNumbers(e)
+
+        result = find_lots.findall(e)
+
+        items = None
+        if result:
+            items = sel_logic_count.make_limits(result[0][0], 
+                                                int(result[0][1]), 
+                                                int(result[0][2]))
+        elif find_digits:
+            items = [e]
         else:
-            print("Error")
+            items = sel_logic_count.make_limits(e)
 
-        print(valsToChange, newVals)
+        result = {}
+        for var_to_change in items:
+            things_to_change = sel_logic_functions.change_type_vals(var_to_change, to)
+            changes = list(zip(things_to_change[0],
+                            things_to_change[1]))
 
-        """
-        to: 'protection' or 'automation'
-
-        """
-        pass
+            for c in changes:
+                lchange = self.l.replace(c[0], c[1])
+                if lchange != []:
+                    result[c] = lchange 
+        return result
 
     def convert_timer(e, from_type, to_type):
         """
@@ -192,7 +222,7 @@ class LogicManipulator:
         PCT           PST
         PST           PCT
         PCT           AST
-        AST           PCT 
+        AST           PCT
         """
         pass
 
@@ -229,6 +259,28 @@ for k in l.lines.values():
 print()
 
 
+print(l.l.pretty_print())
+print(l.change_type('PLT','a')) # PLT15 PLT05-15 PLT5-15 result output
+print(l.change_type('PCT','a')) # PLT15 PLT05-15 PLT5-15 result output
+print(l.change_type('PSV','a')) # PLT15 PLT05-15 PLT5-15 result output
+print(l.change_type('PMV','a')) # PLT15 PLT05-15 PLT5-15 result output
+
+
 
 print(l.l.pretty_print())
-print(l.change_type('PLT13','a'))
+
+
+"""def do_replacement(data, subs, callouts=False):
+
+    Carries out replacement
+    If key is also a value does not replace twice in the dict subs
+
+    # for whole words only
+    # pattern = re.compile(r'\b(' + '|'.join(d.keys()) + r')\b')
+    pattern = re.compile('|'.join(subs.keys()))
+    result = pattern.sub(lambda x: subs[x.group()], data)
+
+    if callouts == False:
+        # remove callouts
+        result = re.sub('<[0-9]{1,3}>','',result)
+"""
