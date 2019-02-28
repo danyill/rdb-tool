@@ -7,7 +7,7 @@ This tool allows various useful operations to occur
 """
 
 import sel_logic_count
-
+import re
 
 logic = """
 ## ## AUTO RECLOSE LOGIC. CONSULT WITH TRANSPOWER BEFORE USING ## ##
@@ -75,24 +75,27 @@ PSV34 := (PLT21 AND F_TRIG PCT17Q AND PSV35) OR (PLT21 AND PLT24 AND R_TRIG PSV3
 class LogicLines:
     def __init__(self, text):
         self.text = text
-        self.lines = {}
-        self.lines_obj = {}
-
+        self.lines = []
         self.makeLines()
         
     def makeLines(self):
         all_lines = (self.text.strip()).split('\n')
         for idx, l in enumerate(all_lines):
-            self.lines[idx] = Line(l, parent=self)
+            self.lines.append(Line(l, parent=self))
 
-        self.lines_obj = {v:k for k,v in self.lines.items()}
+    def addLine(self, text):
+        self.lines.append(Line(text, parent=self))
+        self.text += '\n' + text
 
     def insertLine(self, n, text):
+        self.lines.insert(n, Line(text, parent=self))
+        self.text += '\n' + text
 
-        pass
+    def deleteLine(self, line):
+        self.lines.remove(line)
 
-    def deleteLine(self, n):
-        pass
+    def deleteLineByIndex(self, n):
+        del self.lines[n]
 
     def __str__(self):
         """
@@ -104,7 +107,7 @@ class LogicLines:
         #return 'Total Lines' + ' ' + str(len(self.lines)) + '\n' + 'Comment Lines' + ' ' + str(comment_lines)
         line_text = ''
 
-        for idx, l in self.lines.items():
+        for l in self.lines:
             line_text += str(l) + '\n'
 
         return line_text + '\n' + '\n' + str(sel_logic_count.calc_logic_usage(self.text))
@@ -115,26 +118,69 @@ class Line:
     def __init__(self, text, parent=None):
         self.parent = parent
         self.text = text
-        self.type = ''
-        self.raw_text = sel_logic_count.removeComment(text)
+        self.type = None
+        self.raw_text = sel_logic_count.removeComment(text).strip()
+        COMMENTS = re.compile(r'^.*?(#+.*$)')
+        comment = COMMENTS.findall(self.text)
+        self.comment = '' if not comment else '' + comment[0].strip()
 
         if self.text.startswith('#'):
             self.type = 'comment'
 
     def getLine(self):
-        return self.parent.lines_obj[self]
+        return self.parent.lines.index(self)
 
     def __str__(self):
         if self.type == 'comment':
-            return '{:<4}     {}'.format(self.getLine(), self.text)
+            return '{:<4}     {}'.format(self.getLine(), self.text + self.comment)
         else:
             elems = sel_logic_count.countElementsUsed(self.text) - 1
-            return '{:<4} {:<3} {}'.format(self.getLine(), elems, self.text)
+            return '{:<4} {:<3} {}'.format(self.getLine(), elems, self.text + self.comment)
             
 
-l = LogicLines(logic)
+class LogicManipulator:
+
+    def __init__(self, text):
+        self.l = LogicLines(logic)
+
+    def change_type(e, to):
+        """
+        to: 'protection' or 'automation'
+
+        """
+        pass
+
+    def convert_timer(e, from_type, to_type):
+        """
+        from_type --> to_type
+        PCT           PST
+        PST           PCT
+        PCT           AST
+        AST           PCT 
+        """
+        pass
+
+    def reorder(type,start, exclude):
+        """
+        e.g. PSV, 1, [5]
+         will reorder PSV01, 02, 03, 04, 06, 07 ...
+         and return a dict of substitutions
+        """
+        pass
+
+    def substitute_aliases(d):
+        # accepts a dict
+        pass
+
+    def __str__(self):
+        return str(self.l)
+
+
+l = LogicManipulator(logic)
 print(l)
 
+#l.addLine('PSV99 := AST13S')
+#print(l)
 #print(l.lines[35].getLine())
 """
 for k in l.lines.values():

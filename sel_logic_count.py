@@ -100,7 +100,7 @@ def getVariableRegex(variable_info):
 
 def removeComment(eqn):
     """
-    Remove comments from an equtaion received as a string
+    Remove comments from an equation received as a string
     """
     return re.sub(RDBOperatorsConst.COMMENTS,'', eqn.strip())
 
