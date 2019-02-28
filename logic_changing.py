@@ -6,8 +6,13 @@ This tool allows various useful operations to occur
 
 """
 
-import sel_logic_count
 import re
+
+from colorama import Fore, Back, Style
+
+import sel_logic_count
+import sel_logic_functions
+
 
 logic = """
 ## ## AUTO RECLOSE LOGIC. CONSULT WITH TRANSPOWER BEFORE USING ## ##
@@ -97,6 +102,13 @@ class LogicLines:
     def deleteLineByIndex(self, n):
         del self.lines[n]
 
+    def pretty_print(self):
+        line_text = ''
+        for l in self.lines:
+            line_text += l.pretty_print() + '\n'
+
+        return line_text + '\n' + '\n' + str(sel_logic_count.calc_logic_usage(str(self)))
+
     def __str__(self):
         """
         comment_lines = 0
@@ -110,7 +122,7 @@ class LogicLines:
         for l in self.lines:
             line_text += str(l) + '\n'
 
-        return line_text + '\n' + '\n' + str(sel_logic_count.calc_logic_usage(self.text))
+        return line_text 
                 
 class Line:
     """ an SEL logic line """
@@ -130,20 +142,44 @@ class Line:
     def getLine(self):
         return self.parent.lines.index(self)
 
-    def __str__(self):
+    def pretty_print(self):
         if self.type == 'comment':
-            return '{:<4}     {}'.format(self.getLine(), self.text + self.comment)
+            return '{:<8}        {}'.format(Fore.BLUE + str(self.getLine()),
+                                         Fore.RESET + self.raw_text.strip() + 
+                                         Fore.GREEN + Style.DIM + self.comment +
+                                         Fore.RESET + Style.RESET_ALL)
         else:
             elems = sel_logic_count.countElementsUsed(self.text) - 1
-            return '{:<4} {:<3} {}'.format(self.getLine(), elems, self.text + self.comment)
-            
+            return '{:<8} {:>8}    {}'.format(Fore.BLUE + str(self.getLine()), 
+                                           Fore.LIGHTCYAN_EX + str(elems), 
+                                           Fore.WHITE + self.raw_text +
+                                           Fore.GREEN + Style.DIM + ' ' + self.comment +
+                                           Fore.RESET + Style.RESET_ALL)
+
+    def __str__(self):
+        if len(self.raw_text) > 0:
+            return self.raw_text + ' ' +  self.comment
+        else:
+            return self.comment
 
 class LogicManipulator:
 
     def __init__(self, text):
         self.l = LogicLines(logic)
 
-    def change_type(e, to):
+    def change_type(self, e, to):
+        valsToChange = sel_logic_functions.getInstVals('PLT13')
+        
+        newVals = []
+        if to.lower() in ['p', 'prot', 'protection']:
+            newVals = ['P' + n[1:] for n in valsToChange]
+        elif to.lower() in ['a', 'auto', 'automation']:
+            newVals = ['A' + n[1:] for n in valsToChange]
+        else:
+            print("Error")
+
+        print(valsToChange, newVals)
+
         """
         to: 'protection' or 'automation'
 
@@ -187,3 +223,12 @@ for k in l.lines.values():
     print(k)
 
 """
+
+
+#print(sel_logic_count.getVariableRegex())
+print()
+
+
+
+print(l.l.pretty_print())
+print(l.change_type('PLT13','a'))
