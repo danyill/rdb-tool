@@ -176,12 +176,46 @@ class LogicLines:
         del self.lines[n]
 
     def getDefinitions(self, df):
+        """
+        returns the line where an element is defined
+        e.g. ASV034:= (ALT21 AND F_TRIG ASV038)
+        would be the line object returned if df = 'ASV034'
+        Multiple definitions will result in multiple line 
+        objects being returned
+        """
         result = []
         for l in self.lines:
             dfn = l.raw_text.split(':=')[0].strip()
             #print(dfn)
             if dfn == df:
                 result.append(l)
+        return result
+
+    def getTypeDefinitions(self, df):
+        """
+        Returns all definitions of a particular type.
+        e.g. ASV will return the line objects for the 
+        following definitions if used in the text:
+        ASV001 := blah
+        ASV003 := blah
+        ASV030 := blah
+        """
+        
+        etypes = sel_logic_count.RDBOperatorsConst.TYPES[df]
+        search_regex = {}
+        for var in etypes:
+            result = sel_logic_count.getRawVariableFromTo(var)
+            search_regex[result[0]] = result[1]
+        
+        print(search_regex)
+        replacer = helpers.build_replacer(search_regex)
+
+        result = []
+        for l in self.lines:
+            dfn = replacer(l.raw_text.split(':=')[0].strip())
+            print(dfn)
+            if dfn:
+                result.append(dfn)
         return result
 
     def replace(self, first, second):
@@ -201,7 +235,7 @@ class LogicLines:
                 results.append(result)
         return results
 
-    def getNextVar(self, name, min=None, max=None, qty=1):
+    def getNextVar(self, name, min=None, max=None, qty=1, skipUsed=True):
         # name = 'ASV' etc.
 
         if min == None:
@@ -213,7 +247,10 @@ class LogicLines:
         self.updateLines() # ensure lines are up-to-date
 
         # this does the heavy lifting
-        return sel_logic_count.find_unused_logic(name, sel_logic_count.get_logic_usage(self.text)[1], provideRaw=True, lowestAllowed=min, highestAllowed=max)[0:qty]
+        used = []
+        if skipUsed:
+            used = sel_logic_count.get_logic_usage(self.text)[1]
+        return sel_logic_count.find_unused_logic(name, used, provideRaw=True, lowestAllowed=min, highestAllowed=max)[0:qty]
 
     def updateLines(self):
         self.text = str(self)
@@ -423,12 +460,17 @@ class LogicManipulator:
 
 
 
-    def reorder(type,start, exclude):
+    def reorder(self, types, starts, excludes):
         """
         e.g. PSV, 1, [5]
          will reorder PSV01, 02, 03, 04, 06, 07 ...
          and return a dict of substitutions
         """
+        print(self.l.getNextVar('ALT', min=20, max=None, qty=10, skipUsed=False))
+        print(self.l.getTypeDefinitions('ALT'))
+
+        #sel_logic_count.getRawVariableFromTo('PSV')
+            # def getNextVar(self, name, min=None, max=None, qty=1):
         pass
 
     def substitute_aliases(d):
@@ -480,5 +522,7 @@ l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30)
 
 print(l.l.pretty_print())
 print(l.l)
+print(type(l))
+rr = print(l.reorder('PSV', 1, 1))
 
 # TODO: Used logic should be able to be based on definitions only to distinguish protection and automation logic

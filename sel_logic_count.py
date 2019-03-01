@@ -5,8 +5,6 @@
 This tool simply counts logic used and spare logic and the number of elements used in a SELogic equation.
 
 """
-
-
 import re
 
 from named_constants import Constants
