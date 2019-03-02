@@ -38,8 +38,6 @@ PSV35 := 595P1 # LV CLOSE SUPERVISION CONDITION
 #
 # FIXED AUTO RECLOSE LOGIC PAST THIS POINT. DO NOT MODIFY #
 PSV36 := NOT (52CLS AND 52CLU) # THREE POLE OPEN FOR BOTH TRANSFORMER BREAKERS
-PLT15S := R_TRIG RB16
-PLT15R := R_TRIG RB15
 PCT16PU := 0.000000 # HV CB OPEN INTERVAL TIMER
 PCT16DO := PMV25
 PCT16IN := PLT21 AND R_TRIG PSV36
@@ -485,7 +483,10 @@ class LogicManipulator:
         """
 
         things_to_replace = list(unique_everseen(self.l.getTypeDefinitions(type)[0]))
-
+        if things_to_replace == None:
+            print(ERR_START +
+                  'Nothing to replace in reorder_type for {}.'.format(type) +
+                  ERR_END)
         new_things = self.l.getNextVar(type, min=startNum, max=None,
                                        qty=len(things_to_replace),
                                        skipUsed=False)
@@ -519,15 +520,18 @@ l = LogicManipulator(logic)
 print(l.l.pretty_print())
 
 l.change_type('PLT', 'a') # Change to automation
+# Not PLT15!
+#l.change_type('PLT16-32', 'a') # Change to automation
 l.change_type('PSV', 'a') # Change to automation
 l.change_type('PMV', 'a') # Change to automation
 l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30) # Convert DO and PU only timers
 l.reorder_type('ALT', 1)  # Reordering
-l.reorder_type('ASV', 30) # Reordering, minimum = 30
-l.reorder_type('AMV', 30) # Reordering, minimum = 30
+l.reorder_type('ASV', 30) # Reordering, minimum = 30 for the future!
+l.reorder_type('AMV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AST', 10) # Reordering
 
 print(l.l.pretty_print()) # pretty print
+print(l.l)
 
 
 """
