@@ -2,6 +2,7 @@
 
 import re
 
+import helpers
 import sel_logic_count
 
 def getInstVals(name):
@@ -31,4 +32,21 @@ def change_type_vals(e, to):
     else:
         print("Error")
 
-    return [valsToChange, newVals]    
+    return [valsToChange, newVals] 
+
+def makeLogicItems(e):
+    find_lots = re.compile(r'^([A-Z]+)([0-9]{1,3})-([0-9]{1,3})$')
+    find_digits = helpers.hasNumbers(e)
+
+    result = find_lots.findall(e)
+
+    items = None
+    if result:
+        items = sel_logic_count.make_limits(result[0][0],
+                                            int(result[0][1]),
+                                            int(result[0][2]))
+    elif find_digits:
+        items = [e]
+    else:
+        items = sel_logic_count.make_limits(e)
+    return items

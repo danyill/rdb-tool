@@ -91,6 +91,11 @@ def absolute_backreference(text, n):
 
     return ref_pat.sub(replacer, text)
 
+def multireplace(text, repldict, prefix='', suffix=''):
+    new_repldict = {k:prefix + v + suffix for (k,v) in repldict.items()}
+    replacer = build_replacer(new_repldict) # must not be regex
+    return replacer(text)
+
 #pattern_to_replacement = {'&&': 'and', '!([a-zA-Z_]+)': r'not \1'}
 #replacer = build_replacer(pattern_to_replacement)
 #print(replacer("!this.exists()"))

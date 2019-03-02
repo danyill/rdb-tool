@@ -6,9 +6,15 @@ This tool allows various useful operations to occur
 
 """
 
+from __future__ import absolute_import
+
+import csv
 import re
+
+from io import StringIO
 from difflib import Differ
 from  more_itertools import unique_everseen
+
 
 from colorama import Fore, Back, Style
 
@@ -19,6 +25,21 @@ import sel_logic_functions
 
 ERR_START = Fore.RED + Back.LIGHTBLACK_EX + Style.BRIGHT
 ERR_END = Fore.RESET + Back.RESET + Style.RESET_ALL
+
+aliases = """
+PMV25,C79OI1,HV CB Open Interval -- 5 seconds
+PMV26,C79OI2,LV CB Open Interval -- 15 seconds
+PMV27,C79RCD,Auto Reclose Reclaim Time -- 15 seconds
+PMV28,C79MRCD,Manual Close Reclaim Time -- 10 seconds
+PMV29,C79CLSD,Auto Reclose Close Supervision Time -- 1 second
+PMV30,C79CFD,Close Failure Time -- 180 ms
+PSV29,C79RI,Auto Reclose Initiate -- IN106
+PSV30,C79RIS,Recloser Initiate Supervision
+PSV31,C79DTL,Drive To Lockout Conditions
+PSV32,C79CLS1,HV Close Supervision Condition
+PSV35,C79CLS2,LV Close Supervision Condition
+PSV36,C3POTX,Transformer Three Pole Open
+"""
 
 logic = """
 ## ## AUTO RECLOSE LOGIC. CONSULT WITH TRANSPOWER BEFORE USING ## ##
@@ -128,20 +149,26 @@ class Line:
             self.type = 'comment'
         self.text = str(self)
 
-    def pretty_print(self):
+    def pretty_print(self, withAliases=False):
         if self.type == 'comment':
-            return '{:<8}        {}'.format(Fore.BLUE + str(self.getLineNum()),
-                                            Fore.RESET + self.raw_text.strip() +
-                                            Fore.GREEN + Style.DIM + self.comment +
-                                            Fore.RESET + Style.RESET_ALL)
+            result = '{:<8}        {}'.format(Fore.BLUE + str(self.getLineNum()),
+                                              Fore.RESET + self.raw_text.strip() +
+                                              Fore.GREEN + Style.DIM + self.comment +
+                                              Fore.RESET + Style.RESET_ALL)
         else:
             elems = sel_logic_count.countElementsUsed(self.text) - 1
-            return '{:<8} {:>8}    {}'.format(Fore.BLUE + str(self.getLineNum()),
-                                              Fore.LIGHTCYAN_EX + str(elems),
-                                              Fore.WHITE + self.raw_text +
-                                              Fore.GREEN + Style.DIM + ' ' + self.comment +
-                                              Fore.RESET + Style.RESET_ALL)
-
+            result =  '{:<8} {:>8}    {}'.format(Fore.BLUE + str(self.getLineNum()),
+                                                 Fore.LIGHTCYAN_EX + str(elems),
+                                                 Fore.WHITE + self.raw_text +
+                                                 Fore.GREEN + Style.DIM + ' ' + self.comment +
+                                                 Fore.RESET + Style.RESET_ALL)
+        if withAliases and self.parent:
+            from_to = {k:v[0] for (k,v) in self.parent.aliases.items()}
+            result = helpers.multireplace(result, from_to, 
+                                          prefix=Fore.MAGENTA, suffix=Fore.WHITE)
+        
+        return result
+        
     def __str__(self):
         if len(self.raw_text) > 0:
             return self.raw_text + ' ' +  self.comment
@@ -149,9 +176,10 @@ class Line:
             return self.comment
 
 class LogicLines:
-    def __init__(self, text):
+    def __init__(self, text, aliases):
         self.text = text
         self.lines = []
+        self.aliases = self.get_aliases(aliases)
         self.makeLines()
 
     def makeLines(self):
@@ -190,6 +218,32 @@ class LogicLines:
             if dfn == df:
                 result.append(l)
         return result
+
+    def get_aliases(self, aliasCSV):
+        if aliasCSV:
+            reader = csv.reader(aliasCSV.strip().splitlines(), delimiter=',')
+            al = {}
+            for row in reader:
+                print(row)
+                al[row[0]] = [row[1], row[2]]
+            return al
+        else:
+            return None
+
+    def update_aliases(self, arr):
+        # FIXME: This needs to have the simultaneous update problem fixed.
+        for from_to in arr:
+            if from_to[0] in self.aliases:
+                self.aliases[from_to[1]] = self.aliases[from_to[0]]
+                del self.aliases[from_to[0]]
+
+    def print_aliases(self):
+        print(Fore.YELLOW + Style.BRIGHT + 'Aliases' + Fore.RESET + Style.RESET_ALL)
+        for k, v in self.aliases.items():
+            print('{:>9} {} ➔  {:<20} {}'.format(Fore.BLUE + k, Fore.RESET + Fore.WHITE,
+                                                 Fore.RESET + Fore.GREEN + v[0],
+                                                 Fore.WHITE + Style.DIM + v[1] + Style.RESET_ALL,
+                                                 Fore.RESET + Style.RESET_ALL))
 
     def getTypeDefinitions(self, df):
         """
@@ -266,57 +320,36 @@ class LogicLines:
     def updateLines(self):
         self.text = str(self)
 
-    def pretty_print(self):
+    def pretty_print(self, withAliases=False):
         line_text = ''
         for l in self.lines:
-            line_text += l.pretty_print() + '\n'
+            line_text += l.pretty_print(withAliases) + '\n'
 
         return line_text + '\n' + '\n' + str(sel_logic_count.calc_logic_usage(str(self)))
 
     def __str__(self):
-        """
-        comment_lines = 0
-        for l in self.lines:
-            if l.type == 'comment':
-                comment_lines += 1
-        """
-        #return 'Total Lines' + ' ' + str(len(self.lines)) + '\n' + 'Comment Lines' + ' ' + str(comment_lines)
         line_text = ''
-
         for l in self.lines:
             line_text += str(l) + '\n'
-
         return line_text
 
 class LogicManipulator:
 
-    def __init__(self, text):
-        self.l = LogicLines(logic)
+    def __init__(self, text, aliases):
+        self.l = LogicLines(text, aliases)
 
     def change_type(self, e, to, onlyIfDefined=False):
         # onlyIfDefined= TODO: Not implemented yet
-        find_lots = re.compile(r'^([A-Z]+)([0-9]{1,3})-([0-9]{1,3})$')
-        find_digits = helpers.hasNumbers(e)
 
-        result = find_lots.findall(e)
-
-        items = None
-        if result:
-            items = sel_logic_count.make_limits(result[0][0],
-                                                int(result[0][1]),
-                                                int(result[0][2]))
-        elif find_digits:
-            items = [e]
-        else:
-            items = sel_logic_count.make_limits(e)
-
+        items = sel_logic_functions.makeLogicItems(e)
         # this might just be generic changes
         result = {}
         for var_to_change in items:
             things_to_change = sel_logic_functions.change_type_vals(var_to_change, to)
+            # a (from, to) tuple
             changes = list(zip(things_to_change[0],
                             things_to_change[1]))
-
+            self.l.update_aliases(changes)
             for c in changes:
                 lchange = self.l.replace(c[0], c[1])
                 if lchange != []:
@@ -324,20 +357,7 @@ class LogicManipulator:
         return result
 
     def convert_timers(self, e, from_type, to_type, asv_min=1, asv_max=256):
-        find_lots = re.compile(r'^([A-Z]+)([0-9]{1,3})-([0-9]{1,3})$')
-        find_digits = helpers.hasNumbers(e)
-
-        result = find_lots.findall(e)
-
-        items = None
-        if result:
-            items = sel_logic_count.make_limits(result[0][0],
-                                                int(result[0][1]),
-                                                int(result[0][2]))
-        elif find_digits:
-            items = [e]
-        else:
-            items = sel_logic_count.make_limits(e)
+        items = sel_logic_functions.makeLogicItems(e)
 
         for t in items:
             self.convert_timer(t, from_type, to_type, asv_min=asv_min, asv_max=asv_max)
@@ -492,7 +512,7 @@ class LogicManipulator:
                                        skipUsed=False)
 
         from_to = zip(things_to_replace, new_things)
-        
+
         replacement_dict = {}
 
         for k in from_to:
@@ -505,8 +525,9 @@ class LogicManipulator:
             individual_replacements = zip(from_val_e, to_val_e)
             for ir in individual_replacements:
                 replacement_dict[ir[0]] = ir[1]
-        
+
         self.l.multireplace(replacement_dict)
+        self.l.update_aliases(list(replacement_dict.items()))
 
     def substitute_aliases(d):
         # accepts a dict
@@ -515,13 +536,12 @@ class LogicManipulator:
     def __str__(self):
         return str(self.l)
 
-l = LogicManipulator(logic)
+l = LogicManipulator(logic, aliases)
 
 print(l.l.pretty_print())
 
+
 l.change_type('PLT', 'a') # Change to automation
-# Not PLT15!
-#l.change_type('PLT16-32', 'a') # Change to automation
 l.change_type('PSV', 'a') # Change to automation
 l.change_type('PMV', 'a') # Change to automation
 l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30) # Convert DO and PU only timers
@@ -530,8 +550,8 @@ l.reorder_type('ASV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AMV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AST', 10) # Reordering
 
-print(l.l.pretty_print()) # pretty print
-print(l.l)
+print(l.l.pretty_print(withAliases=True)) # pretty print
+print(l.l.print_aliases())
 
 
 """
