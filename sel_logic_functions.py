@@ -18,7 +18,7 @@ def getInstVals(name):
 
 def change_type_vals(e, to):
     valsToChange = getInstVals(e)
-    
+
     newVals = []
     if to.lower() in ['p', 'prot', 'protection']:
         newVals = ['P' + n[1:] for n in valsToChange]
@@ -32,7 +32,7 @@ def change_type_vals(e, to):
     else:
         print("Error")
 
-    return [valsToChange, newVals] 
+    return [valsToChange, newVals]
 
 def makeLogicItems(e):
     find_lots = re.compile(r'^([A-Z]+)([0-9]{1,3})-([0-9]{1,3})$')

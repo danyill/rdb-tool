@@ -16,6 +16,7 @@ from difflib import Differ
 from  more_itertools import unique_everseen
 
 from colorama import Fore, Back, Style
+import lxml.etree as ET
 
 import helpers
 import sel_logic_count
@@ -74,7 +75,7 @@ PCT20PU := PMV28 # MANUAL RECLAIM TIMER
 PCT20DO := 0.000000
 PCT20IN := PLT22 AND NOT PSV31 AND PSV30
 PCT21PU := PMV30 # CB CLOSE FAILURE TIMER
-PCT21DO := 1.000000
+PCT21DO := 0.000000
 PCT21IN := PLT15 AND (PCT05Q AND NOT 52CLS OR PCT07Q AND NOT 52CLU)
 PCT22PU := PMV29 # HV CLOSE SUPERVISION TIMER
 PCT22DO := 0.000000
@@ -236,6 +237,9 @@ class LogicLines:
             new_dict[helpers.multiple_replace(k, update_dict)] = v
         self.aliases = new_dict
 
+    def add_alias(self, rwb, alias, description):
+        self.aliases[rwb] = [alias, description]
+
     def print_aliases(self):
         print(Fore.YELLOW + Style.BRIGHT + 'Aliases' + Fore.RESET + Style.RESET_ALL)
         for k, v in self.aliases.items():
@@ -336,6 +340,7 @@ class LogicManipulator:
 
     def __init__(self, text, aliases):
         self.l = LogicLines(text, aliases)
+        self.history = []
 
     def change_type(self, e, to, onlyIfDefined=False):
         # onlyIfDefined= TODO: Not implemented yet
@@ -348,6 +353,7 @@ class LogicManipulator:
             # a (from, to) tuple
             changes = list(zip(things_to_change[0],
                             things_to_change[1]))
+            self.history.append(changes)
             self.l.update_aliases(changes)
             for c in changes:
                 lchange = self.l.replace(c[0], c[1])
@@ -512,6 +518,8 @@ class LogicManipulator:
 
         from_to = zip(things_to_replace, new_things)
 
+        self.history.append(list(zip(things_to_replace, new_things)))
+
         replacement_dict = {}
 
         for k in from_to:
@@ -537,6 +545,8 @@ class LogicManipulator:
 
 l = LogicManipulator(logic, aliases)
 
+first_aliases = l.l.aliases
+
 print(l.l.pretty_print())
 
 
@@ -549,9 +559,14 @@ l.reorder_type('ASV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AMV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AST', 10) # Reordering
 
-print(l.l.pretty_print(withAliases=True)) # pretty print
+
+l.l.add_alias('ASV040','C79CLHV','ARecl Close of HV CB')
+l.l.add_alias('ASV041','C79CLLV','ARecl Close of LV CB')
+
+print(l.l.pretty_print(withAliases=False)) # pretty print
 print(l.l.print_aliases())
 
+second_aliases = l.l.aliases
 
 """
 d = Differ()
@@ -569,3 +584,32 @@ print(l.l.pretty_print())
 """
 
 # TODO: Used logic should be able to be based on definitions only to distinguish protection and automation logic
+
+def update_svg(a, b, h):
+
+    new_dict = {}
+    for k1, v1 in a.items():
+        for k2, v2 in b.items():
+            if v1 == v2:
+                new_dict[k1] = k2
+    
+    h.append(new_dict)
+    
+    xml = ET.parse('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/setting_guide/media/autoreclose_logic_diagram.svg')
+    svg = xml.getroot()
+    a = svg.findall(".//{http://www.w3.org/2000/svg}tspan")
+
+    for k in a:
+        the_text = str(k.text)
+        for thing in h:
+            the_dict = dict(thing)
+            the_text = helpers.multireplace(the_text, the_dict)
+        if k.text != None and the_text != None:
+            k.text = the_text   
+
+    out = ET.tostring(svg, encoding='utf-8', pretty_print=True)
+
+    with open('test.svg', 'wb') as f:
+        f.write(out)
+
+update_svg(first_aliases, second_aliases, l.history)
