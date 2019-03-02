@@ -15,7 +15,6 @@ from io import StringIO
 from difflib import Differ
 from  more_itertools import unique_everseen
 
-
 from colorama import Fore, Back, Style
 
 import helpers
@@ -224,25 +223,25 @@ class LogicLines:
             reader = csv.reader(aliasCSV.strip().splitlines(), delimiter=',')
             al = {}
             for row in reader:
-                print(row)
                 al[row[0]] = [row[1], row[2]]
             return al
         else:
             return None
 
     def update_aliases(self, arr):
-        # FIXME: This needs to have the simultaneous update problem fixed.
-        for from_to in arr:
-            if from_to[0] in self.aliases:
-                self.aliases[from_to[1]] = self.aliases[from_to[0]]
-                del self.aliases[from_to[0]]
+        update_dict = dict(arr)
+        new_dict = {}
+        # done this way to ensure no sequential replacement issues
+        for k, v in self.aliases.items():
+            new_dict[helpers.multiple_replace(k, update_dict)] = v
+        self.aliases = new_dict
 
     def print_aliases(self):
         print(Fore.YELLOW + Style.BRIGHT + 'Aliases' + Fore.RESET + Style.RESET_ALL)
         for k, v in self.aliases.items():
-            print('{:>9} {} ➔  {:<20} {}'.format(Fore.BLUE + k, Fore.RESET + Fore.WHITE,
-                                                 Fore.RESET + Fore.GREEN + v[0],
-                                                 Fore.WHITE + Style.DIM + v[1] + Style.RESET_ALL,
+            print('{:>9} {} ➔  {:<20} {}'.format(Fore.WHITE + k, Fore.RESET + Fore.LIGHTRED_EX,
+                                                 Fore.RESET + Fore.MAGENTA + v[0],
+                                                 Fore.GREEN + Style.DIM + v[1] + Style.RESET_ALL,
                                                  Fore.RESET + Style.RESET_ALL))
 
     def getTypeDefinitions(self, df):
