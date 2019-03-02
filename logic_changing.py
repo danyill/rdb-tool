@@ -8,6 +8,7 @@ This tool allows various useful operations to occur
 
 import re
 from difflib import Differ
+from  more_itertools import unique_everseen
 
 from colorama import Fore, Back, Style
 
@@ -110,9 +111,10 @@ class Line:
         else:
             print('Error!')
 
-    def replace_line(self, raw, comment):
+    def replace_line(self, raw, comment=None, keepComment=False):
+        if not keepComment:
+            self.comment = comment
         self.raw_text = raw
-        self.comment = comment
         self.type = None
         self.update()
 
@@ -180,7 +182,7 @@ class LogicLines:
         returns the line where an element is defined
         e.g. ASV034:= (ALT21 AND F_TRIG ASV038)
         would be the line object returned if df = 'ASV034'
-        Multiple definitions will result in multiple line 
+        Multiple definitions will result in multiple line
         objects being returned
         """
         result = []
@@ -194,29 +196,34 @@ class LogicLines:
     def getTypeDefinitions(self, df):
         """
         Returns all definitions of a particular type.
-        e.g. ASV will return the line objects for the 
+        e.g. ASV will return the values and the line objects for the
         following definitions if used in the text:
         ASV001 := blah
         ASV003 := blah
         ASV030 := blah
         """
-        
+
         etypes = sel_logic_count.RDBOperatorsConst.TYPES[df]
         search_regex = {}
         for var in etypes:
             result = sel_logic_count.getRawVariableFromTo(var)
             search_regex[result[0]] = result[1]
-        
-        print(search_regex)
+
+        substrs = sorted(search_regex, key=len, reverse=True)
+        regex_search = re.compile('|'.join(substrs))
+
         replacer = helpers.build_replacer(search_regex)
 
         result = []
+        result_lines = []
         for l in self.lines:
-            dfn = replacer(l.raw_text.split(':=')[0].strip())
-            print(dfn)
+            candidate = l.raw_text.split(':=')[0].strip()
+            dfn = regex_search.findall(candidate)
             if dfn:
-                result.append(dfn)
-        return result
+                result.append(replacer(candidate))
+                result_lines.append(l)
+
+        return [result, result_lines]
 
     def replace(self, first, second):
         replacements = []
@@ -226,6 +233,12 @@ class LogicLines:
                 replacements.append(l.getLineNum())
         self.updateLines()
         return replacements
+
+    def multireplace(self, repldict):
+        replacer = helpers.build_replacer(repldict) # must not be regex
+        for l in self.lines:
+            result = replacer(l.raw_text)
+            l.replace_line(result, keepComment=True)
 
     def find(self, regex):
         results = []
@@ -240,7 +253,7 @@ class LogicLines:
 
         if min == None:
             min = sel_logic_count.RDBOperatorsConst.LIMITS[name][0]
-        
+
         if max == None:
             max = sel_logic_count.RDBOperatorsConst.LIMITS[name][1]
 
@@ -291,8 +304,8 @@ class LogicManipulator:
 
         items = None
         if result:
-            items = sel_logic_count.make_limits(result[0][0], 
-                                                int(result[0][1]), 
+            items = sel_logic_count.make_limits(result[0][0],
+                                                int(result[0][1]),
                                                 int(result[0][2]))
         elif find_digits:
             items = [e]
@@ -309,7 +322,7 @@ class LogicManipulator:
             for c in changes:
                 lchange = self.l.replace(c[0], c[1])
                 if lchange != []:
-                    result[c] = lchange 
+                    result[c] = lchange
         return result
 
     def convert_timers(self, e, from_type, to_type, asv_min=1, asv_max=256):
@@ -320,14 +333,14 @@ class LogicManipulator:
 
         items = None
         if result:
-            items = sel_logic_count.make_limits(result[0][0], 
-                                                int(result[0][1]), 
+            items = sel_logic_count.make_limits(result[0][0],
+                                                int(result[0][1]),
                                                 int(result[0][2]))
         elif find_digits:
             items = [e]
         else:
             items = sel_logic_count.make_limits(e)
-        print(items)
+
         for t in items:
             self.convert_timer(t, from_type, to_type, asv_min=asv_min, asv_max=asv_max)
 
@@ -349,7 +362,7 @@ class LogicManipulator:
             do = [x for x in vals if x.endswith('DO')][0]
             inp = [x for x in vals if x.endswith('IN')][0]
             q = [x for x in vals if x.endswith('Q')][0]
-            
+
             pu_def = self.l.getDefinitions(pu)[0]
             do_def = self.l.getDefinitions(do)[0]
             in_def = self.l.getDefinitions(inp)[0]
@@ -357,17 +370,17 @@ class LogicManipulator:
             # TODO: FIXME check if there is more than 1, if so error out as a minimum
 
             try:
-                pu_time = float(pu_def.raw_text.split(':=')[1].strip()) 
+                pu_time = float(pu_def.raw_text.split(':=')[1].strip())
             except ValueError:
                 pu_time = pu_def.raw_text.split(':=')[1].strip()
 
             try:
-                do_time = float(do_def.raw_text.split(':=')[1].strip()) 
+                do_time = float(do_def.raw_text.split(':=')[1].strip())
             except ValueError:
                  do_time = do_def.raw_text.split(':=')[1].strip()
 
             in_val = in_def.raw_text.split(':=')[1].strip()
-            
+
             print('Timer Info: PU: {} DO: {} IN: {}'.format(pu_time,do_time,in_val))
 
             if pu_time != 0 and do_time != 0:
@@ -376,7 +389,7 @@ class LogicManipulator:
 
             elif pu_time != 0 and do_time == 0:
                 """
-                pickup only 
+                pickup only
 
                 PCT01PU:= 5             AST01PT:= 5/50
                 PCT01DO:= 0             AST01R:= NOT(X)
@@ -384,59 +397,59 @@ class LogicManipulator:
                 Output == PCT01Q        Output == AST01Q
                 """
                 if isinstance(pu_time, float):
-                    pu_def.replace_line('{}{}{} := {:-f}'.format('AST', num, 'PT', 
-                                                                 round(pu_time/FREQUENCY,5)), 
+                    pu_def.replace_line('{}{}{} := {:-f}'.format('AST', num, 'PT',
+                                                                 round(pu_time/FREQUENCY,5)),
                                                                  pu_def.comment)
                 # Sometimes we set the time to a math variable, not a number!
                 else:
-                    print(ERR_START +  
-                          'Need to _manually_ adjust {} time from cycles to seconds'.format(pu_time) + 
+                    print(ERR_START +
+                          'Need to _manually_ adjust {} time from cycles to seconds'.format(pu_time) +
                           ERR_END)
                           # TODO: Recursive search for a numeric or convertible value. Complicated.
-                    pu_def.replace_line('{}{}{} := {}'.format('AST', num, 'PT', 
-                                                              pu_time), 
+                    pu_def.replace_line('{}{}{} := {}'.format('AST', num, 'PT',
+                                                              pu_time),
                                                               pu_def.comment)
 
-                do_def.replace_line('{}{}{} := {}'.format('AST', num, 'R', 
+                do_def.replace_line('{}{}{} := {}'.format('AST', num, 'R',
                                                           'NOT(' + in_val + ')'),
                                                            do_def.comment)
-                in_def.replace_line('{}{}{} := {}'.format('AST', num, 'IN', 
-                                                          in_val), 
+                in_def.replace_line('{}{}{} := {}'.format('AST', num, 'IN',
+                                                          in_val),
                                                           in_def.comment)
                 self.l.replace(q, 'AST' + num + 'Q')
-            
+
             elif pu_time == 0 and do_time != 0:
                 """
-                dropoff only 
+                dropoff only
                 PCT01PU:= 25            AST01PT:= 25/50 * NOT AFRTEXP
                 PCT01DO:= 0             AST01R:= X
                 PCT01IN:= X             AST01IN:= NOT(X)
                 Output == PCT01Q        Output == NOT(AST01Q)
                 """
                 if isinstance(do_time, float):
-                    pu_def.replace_line('{}{}{} := {:-f} * NOT AFRTEXP'.format('AST', num, 'PT', 
-                                                                 round(do_time/FREQUENCY,5)), 
+                    pu_def.replace_line('{}{}{} := {:-f} * NOT AFRTEXP'.format('AST', num, 'PT',
+                                                                 round(do_time/FREQUENCY,5)),
                                                                  pu_def.comment)
                 # Sometimes we set the time to a math variable, not a number!
                 else:
-                    print(ERR_START + 
-                          'Need to _manually_ adjust {} time from cycles to seconds'.format(pu_time) + 
+                    print(ERR_START +
+                          'Need to _manually_ adjust {} time from cycles to seconds'.format(pu_time) +
                           ERR_END)
                           # TODO: Recursive search for a numeric or convertible value. Complicated.
-                    pu_def.replace_line('{}{}{} := {} * NOT AFRTEXP'.format('AST', num, 'PT', 
-                                                              do_time), 
+                    pu_def.replace_line('{}{}{} := {} * NOT AFRTEXP'.format('AST', num, 'PT',
+                                                              do_time),
                                                               pu_def.comment)
 
-                do_def.replace_line('{}{}{} := {}'.format('AST', num, 'R', 
+                do_def.replace_line('{}{}{} := {}'.format('AST', num, 'R',
                                                            in_val),
                                                            do_def.comment)
-                in_def.replace_line('{}{}{} := {}'.format('AST', num, 'IN', 
-                                                          'NOT' + '(' + in_val + ')'), 
+                in_def.replace_line('{}{}{} := {}'.format('AST', num, 'IN',
+                                                          'NOT' + '(' + in_val + ')'),
                                                           in_def.comment)
                 self.l.replace(q, 'NOT' + ' (' + 'AST' + num + 'Q' + ')')
 
                 """
-                We now end up with expressions like: 
+                We now end up with expressions like:
                 F_TRIG NOT(AST18Q) or R_TRIG NOT(AST18Q)
                 which is invalid and we need another ASV allocation so that after AST18IN we have:
                 ASVxx := NOT(ASTQ18Q)
@@ -451,27 +464,48 @@ class LogicManipulator:
                     self.l.insertLine(in_def.getLineNum()+1, next_asv[0] + ' := ' + 'NOT' +  ' ' + 'AST' + str(num) + 'Q')
                     for l in new_lines_required:
                         if next_asv:
-                            print(l)
+                            #print(l)
                             l.replace_line(re.sub(AST_DROPOFF_NEW_LINE_REQUIRED_REGEX, r'\1' + next_asv[0] + r'\3', l.raw_text),
                                            l.comment)
                         else:
-                            print(ERR_START +  
+                            print(ERR_START +
                                 'No more ASVs available :-(')
 
 
 
-    def reorder(self, types, starts, excludes):
+    def reorder_type(self, type, startNum):
         """
         e.g. PSV, 1, [5]
-         will reorder PSV01, 02, 03, 04, 06, 07 ...
-         and return a dict of substitutions
+        will reorder PSV01, 02, 03, 04, 06, 07 ...
+        and return a dict of substitutions
+        could add excludes
+        l.change_type('PLT', 'a') # PLT PLT15 PLT05-15 PLT5-15 result output
+        l.change_type('PSV', 'a') # PSV PLT15 PLT05-15 PLT5-15 result output
+        l.change_type('PMV', 'a') # PMV PLT15 PLT05-15 PLT5-15 result output
         """
-        print(self.l.getNextVar('ALT', min=20, max=None, qty=10, skipUsed=False))
-        print(self.l.getTypeDefinitions('ALT'))
 
-        #sel_logic_count.getRawVariableFromTo('PSV')
-            # def getNextVar(self, name, min=None, max=None, qty=1):
-        pass
+        things_to_replace = list(unique_everseen(self.l.getTypeDefinitions(type)[0]))
+
+        new_things = self.l.getNextVar(type, min=startNum, max=None,
+                                       qty=len(things_to_replace),
+                                       skipUsed=False)
+
+        from_to = zip(things_to_replace, new_things)
+        
+        replacement_dict = {}
+
+        for k in from_to:
+
+            from_val = k[0]
+            to_val = k[1]
+            from_val_e = sel_logic_functions.getInstVals(from_val)
+            to_val_e = sel_logic_functions.getInstVals(to_val)
+
+            individual_replacements = zip(from_val_e, to_val_e)
+            for ir in individual_replacements:
+                replacement_dict[ir[0]] = ir[1]
+        
+        self.l.multireplace(replacement_dict)
 
     def substitute_aliases(d):
         # accepts a dict
@@ -482,26 +516,19 @@ class LogicManipulator:
 
 l = LogicManipulator(logic)
 
-#print(l)
-
-#l.addLine('PSV99 := AST13S')
-#print(l)
-#print(l.lines[35].getLineNum())
-"""
-for k in l.lines.values():
-    print(k)
-
-"""
-
-
-#print(sel_logic_count.getVariableRegex())
-
 print(l.l.pretty_print())
 
-print(l.change_type('PLT','a')) # PLT PLT15 PLT05-15 PLT5-15 result output
-#print(l.change_type('PCT','a')) # PLT15 PLT05-15 PLT5-15 result output
-print(l.change_type('PSV','a')) # PSV PLT15 PLT05-15 PLT5-15 result output
-print(l.change_type('PMV','a')) # PMV PLT15 PLT05-15 PLT5-15 result output
+l.change_type('PLT', 'a') # Change to automation
+l.change_type('PSV', 'a') # Change to automation
+l.change_type('PMV', 'a') # Change to automation
+l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30) # Convert DO and PU only timers
+l.reorder_type('ALT', 1)  # Reordering
+l.reorder_type('ASV', 30) # Reordering, minimum = 30
+l.reorder_type('AMV', 30) # Reordering, minimum = 30
+l.reorder_type('AST', 10) # Reordering
+
+print(l.l.pretty_print()) # pretty print
+
 
 """
 d = Differ()
@@ -517,12 +544,5 @@ pprint(result)
 
 print(l.l.pretty_print())
 """
-
-l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30)
-
-print(l.l.pretty_print())
-print(l.l)
-print(type(l))
-rr = print(l.reorder('PSV', 1, 1))
 
 # TODO: Used logic should be able to be based on definitions only to distinguish protection and automation logic

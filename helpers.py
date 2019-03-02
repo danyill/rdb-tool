@@ -55,7 +55,7 @@ def multiple_replace(text, repldict):
     return re.sub(pattern, repl, text)
 
 # https://stackoverflow.com/questions/45128959/python-replace-multiple-strings-while-supporting-backreferences
-
+#https://stackoverflow.com/questions/6116978/how-to-replace-multiple-substrings-of-a-string
 
 def build_replacer(cases):
     ordered_cases = OrderedDict(cases.items())
@@ -91,7 +91,6 @@ def absolute_backreference(text, n):
 
     return ref_pat.sub(replacer, text)
 
-pattern_to_replacement = {'&&': 'and', '!([a-zA-Z_]+)': r'not \1'}
-
-replacer = build_replacer(pattern_to_replacement)
-print(replacer("!this.exists()"))
+#pattern_to_replacement = {'&&': 'and', '!([a-zA-Z_]+)': r'not \1'}
+#replacer = build_replacer(pattern_to_replacement)
+#print(replacer("!this.exists()"))

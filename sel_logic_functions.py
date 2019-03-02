@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import re
+
 import sel_logic_count
 
 def getInstVals(name):
@@ -10,7 +12,7 @@ def getInstVals(name):
     num = name[3:]   #     and a value which is the remainder
 
     type_inst = sel_logic_count.RDBOperatorsConst.TYPES[type]
-    types = [e.replace('xx', num).replace('$', '') for e in type_inst]
+    types = [re.sub(r'x+', num, e).replace('$', '') for e in type_inst]
     return types
 
 def change_type_vals(e, to):
