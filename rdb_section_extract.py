@@ -14,6 +14,16 @@ import olefile
 
 import sel_logic_count
 
+LINE_INFO = ['Lines Used (w/ comment lines)', 'Lines Used (w/o comment lines)']
+
+LOGIC_INFO = [ 'PSV', 'PMV', 'PLT', 'PCT', 'PST', 'PCN',
+                'ASV', 'AMV', 'ALT',        'AST', 'ACN']
+
+TOTAL_SEL_PROTECTION_LINES = 250
+TOTAL_SEL_AUTOMATION_LINES = 1000
+
+
+
 # this probably needs to be expanded
 SEL_FILES_TO_GROUP = {
     'G': ['SET_G1'],
@@ -102,37 +112,39 @@ def get_sel_setting(text):
     setting_expression = re.compile(r'^([A-Z0-9_]+),\"(.*)\"(?:\r\n|\x1c\r\n)', flags=re.MULTILINE)
     return re.findall(setting_expression, text)
 
-def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
+def format_logic(d):
+    # get logic report
+    if isinstance(d, str):
+        raw_results = collections.OrderedDict()
+        for k, v in d.items():
+            raw_results[k] = sel_logic_count.calc_usage_raw(v)
+        return raw_results
+    else:
+        return d
+
+def make_table_data(raw_results):
+    table_data = []
+
+    for row_name in LINE_INFO + LOGIC_INFO:
+        table_row = [row_name]
+        for k, v in raw_results.items():
+            if row_name in v:
+                table_row.append(v[row_name])
+        table_data.append(table_row)
+
+    return table_data
+
+def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None, automation=None, total=None):
     """
     d is a dictionary with the group number as the key
     and the protection logic as the values
     This is processed and an Asciidoc table is produced
     """
 
-    columns = 4*len(d) + 1
+    columns = 3*len(d) + 1
 
     # get logic report
-    raw_results = collections.OrderedDict()
-    for k, v in d.items():
-        raw_results[k] = sel_logic_count.calc_usage_raw(v)
-
-    line_info = ['Lines Used (w/ comment lines)', 'Lines Used (w/o comment lines)']
-
-    logic_info = [ 'PSV', 'PMV', 'PLT', 'PCT', 'PST', 'PCN',
-                   'ASV', 'AMV', 'ALT',        'AST', 'ACN']
-
-    TOTAL_SEL_PROTECTION_LINES = 250
-
-    table_data = []
-
-    for row_name in line_info + logic_info:
-
-        table_row = [row_name]
-
-        for k, v in raw_results.items():
-            table_row.append(v[row_name])
-
-        table_data.append(table_row)
+    table_data = make_table_data(format_logic(d))
 
     no_groups = len(d)
     info = []
@@ -142,7 +154,7 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
 
     # Title
     if settings_name:
-        keys = ', '.join([str(ky) for ky in d.keys()])
+        keys = ', '.join([str(ky)[1:2] for ky in d.keys()])
         info.append('.`{}` Logic Usage in Setting Groups {}'.format(settings_name.upper(), keys))
 
     # Column Definitions
@@ -154,36 +166,45 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
     info.append('h|')
     for group in d.keys():
         info.append('3+^.^h| '.format(no_groups) +
-                    '{} {}'.format(group_title, group))
+                    '{} {}'.format(group_title, group[1:]))
 
+    info.append('')
+    info.append(str(columns)+'+^.^h| Protection Usage')
     info.append('')
 
     # Overall line information
     for k in table_data:
-        if k[0] in line_info:
+        if k[0] in LINE_INFO:
             pr = ('h| {}').format(k[0]).ljust(50)
             for gd in k[1:]:
                 pr += '3+^.^| {} / {} '.format(gd, TOTAL_SEL_PROTECTION_LINES).ljust(20)
             info.append(pr)
-
-    info.append('')
 
     # Capacity free from relay STA S command
     sta_s_info = ['Free protection settings capacity (%)', 'Free protection execution capacity (%)']
 
     for s in sta_s_info:
         pr = ('h| {} ').format(s).ljust(50)
-        for gd in k[1:]:
-            pr += '3+^.^| ??? '.ljust(20)
+        for gd in range(no_groups):
+            pr += '3+^.^| #??# '.ljust(20)
         info.append(pr)
 
     info.append('')
+    if d and not total:
+        info.append(str(columns)+'+^.^h| Variable Usage for Protection Logic')    
+    elif total and automation:
+        info.append(str(columns)+'+^.^h| Variable Usage for Protection and Automation Logic')
+    info.append('')
+
     info.append('h| Variable ' +
                 ' '.join(['h| Used h| Free % h| Available']*no_groups))
     info.append('')
 
+    if total:
+        table_data = make_table_data(format_logic(total))
+
     for k in table_data:
-        if k[0] in logic_info:
+        if k[0] in LOGIC_INFO:
             pr = ('h| `{}`'.format(k[0])).ljust(13)
             for gd in k[1:]:
                 fstr = '| {:>12} | {:<7.0%} | {:<30}'
@@ -192,27 +213,105 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None):
                                   '[small]#{}#'.format(gd['available_detail']))
             info.append(pr)
 
+    if automation:
+        info.append('')
+        info.append(str(columns)+'+^.^h| Automation Usage')
+        info.append('')
+
+        # Group Title
+        info.append('h|')
+        for group in d.keys():
+            info.append('3+^.^h| '.format(no_groups) +
+                        '{} {}'.format(group_title, group[1:]))
+
+        questions = ['3+^.^| #??# '] * no_groups
+
+        info.append('{:<50} {}'.format('h| Free automation settings storage capacity (%)', ''.join(questions)))
+        info.append('{:<50} {}'.format('h| Free automation execution availability (%)', ''.join(questions)))
+        info.append('{:<50} {}'.format('h| Automation peak execution cycle time (ms)', ''.join(questions)))
+        info.append('{:<50} {}'.format('h| Automation average execution cycle time (ms)', ''.join(questions)))
+
+        table_data = make_table_data(format_logic(automation))
+
+        # Overall line information
+        for k in table_data:
+            if k[0] in LINE_INFO:
+                pr = ('h| {} ').format(k[0]).ljust(51)
+                for gd in k[1:]:
+                    pr +=  str(no_groups * 3) + '+^.^| {} / {} '.format(gd, TOTAL_SEL_AUTOMATION_LINES).ljust(20)
+                info.append(pr)
+                    
     info.append('|===')
 
     return('\n'.join(info))
 
-def plogic_used(filepath, group_prefix, *nums):
-
+def get_logic(filepath, *names):
     logics = {}
-    for num in nums:
-        print(filepath,num)
-        [settings_name, output] = process_file(filepath, 'L'+str(num))
+    for name in names:
+        #print(filepath, name)
+        [settings_name, output] = process_file(filepath, name)
         lines = get_sel_setting(output)
         result = []
         for settings in lines:
             result.append(settings[1])
         logic_text = "\n".join(result)
-        logics[num] = logic_text
+        logics[name] = logic_text
+    return logics
+
+def get_logic_total(path, groups, includeAutomation=True):
+    # get logic for number of protection 
+    groups_new = ['L' + str(g) for g in groups]
+    protection = get_logic(path, *groups_new)
+    
+    automation_arr = []
+    if includeAutomation:
+        for block in range(1,10+1):
+            #print(get_logic(path, 'A' + str(block)))
+            automation_arr.append(get_logic(path, 'A' + str(block))['A' + str(block)])
+        automation = '\n'.join(automation_arr)
+        return [protection, automation]
+    
+    return [protection]
+
+def plogic_used(filepath, group_prefix, settings_name, *nums):
+
+    logics = get_logic(filepath, *nums)
 
     if len(nums) == 1:
         return sel_logic_count.calc_logic_usage(logics[nums[0]])
     else:
         return sum_logic_usage_multiple_groups(logics, group_prefix, settings_name)
+
+def pa_logic_used(filepath, group_prefix, settings_name, *nums):
+
+    logics = get_logic_total(filepath, nums, includeAutomation=True)
+    LINES = ['Lines Used (w/ comment lines)', 'Lines Used (w/o comment lines)']
+    
+    automation = sel_logic_count.calc_usage_raw(logics[1])
+    automation = {k:v for (k,v) in automation.items() if k in LINES}
+    automation = {'A': automation}
+    
+    protection = {}
+    total = {}
+
+    for group in nums:
+        # print(group)
+        pg = sel_logic_count.calc_usage_raw(logics[0]['L' + str(group)])
+        protection['L' + str(group)] = {k:v for (k,v) in pg.items() if k in LINES}
+                
+        tg = sel_logic_count.calc_usage_raw(logics[0]['L' + str(group)] + '\n' + logics[1])
+        total['L' + str(group)] = {k:v for (k,v) in tg.items() if k not in LINES}
+        
+    #print('p',protection, 'a', automation, 't', total)
+    print(sum_logic_usage_multiple_groups(protection, group_prefix, settings_name, automation, total))
+        
+    """
+    if len(nums) == 1:
+        return sel_logic_count.calc_logic_usage(logics[nums[0]])
+    else:
+        return sum_logic_usage_multiple_groups(logics, group_prefix, settings_name)
+    """
+
 
 if __name__ == '__main__':
 
@@ -254,8 +353,65 @@ if __name__ == '__main__':
     #plogic_used('/home/mulhollandd/Downloads/SEL487E-3_Transformer_Protection_Settings_v14Aug2017.000.002/settings/SEL-487E-3.rdb', 1)
 
     
-    path = '/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb'
+    #path = '/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb'
     #path = r'G:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
+    path = r'F:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
     #path = '/home/mulhollandd/Downloads/junk/SEL-487E-3.rdb'
-    print(plogic_used(path, 'Application', 1,2))
+    #print(plogic_used(path, 'Application', 1, 2))
+
+
+    #print(get_logic_total(path, [1,2]))
+    
+    
+    #print(pa_logic_used(path, 'Application', 1, 2))
+    #print(plogic_used(path, 'Application', 'Blah', 'L1', 'L2'))
+    pa_logic_used(path, 'Application', 'TYP123', '1')
+    
+    #output = process_file(path, 'R1')
+    #print(output)
+
+    
+    
+
+    #print(output)
+    """
+    ser_points_and_aliases = {}
+    for counter in range(1, 250+1):
+        num = str(counter)
+        #SITM70,"TRIPT"\x1c\r\nSNAME70,"TRIPT"\x1c\r\nSSET70,"Asserted"\x1c\r\nSCLR70,"Deasserted"\x1c\r\nSHMI70,"N"
+        match = re.compile(r'SITM' + num + r',"([A-Z0-9_]*)"\x1c\r\nSNAME' + num + r',"([A-Za-z0-9_]+)*"\x1c\r\nSSET' + num + ',"(.*)"\x1c\r\nSCLR'+ num + ',"(.*)"\x1c\r\nSHMI' + num + r',"([A-Z0-9_]+)*"', flags=re.MULTILINE)
+        result = match.findall('\n'.join(output))
+        rwb = result[0][0]
+        aliases = result[0][1]
+        alias_set = result[0][2]
+        alias_clear = result[0][3]
+        hmi_alarm = result[0][4]
+        
+        ser_points_and_aliases[rwb] = [aliases, alias_set, alias_clear, hmi_alarm]
+        
+        print(rwb, [aliases, alias_set, alias_clear, hmi_alarm])
+        
+    
+    output = process_file(path, 'P1')
+
+    protection = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6']
+    automation = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10']
+
+    for logic in protection + automation
+    output = process_file(path, 'P1')
+    output = process_file(path, 'P1')
+    output = process_file(path, 'P1')
+    output = process_file(path, 'P1')
+    output = process_file(path, 'P1')
+    """
+
+
+    #for k in output:
+    #    print(k)
+
+    #  SITM248,"PST07Q"    SNAME248,"PST07Q"    SSET248,"Asserted"    SCLR248,"Deasserted"    SHMI248,"N"
+    #  
+
+    # tool to remove protection and automation aliases which are unused.
+
     

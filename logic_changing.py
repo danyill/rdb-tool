@@ -543,30 +543,68 @@ class LogicManipulator:
     def __str__(self):
         return str(self.l)
 
+def update_svg(a, b, h):
+
+    new_dict = {}
+    for k1, v1 in a.items():
+        for k2, v2 in b.items():
+            if v1 == v2:
+                new_dict[k1] = k2
+    
+    h.append(new_dict)
+    
+    #xml = ET.parse('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/setting_guide/media/autoreclose_logic_diagram.svg')
+    xml = ET.parse(r'F:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\setting_guide\media\autoreclose_logic_diagram.svg')
+
+    svg = xml.getroot()
+    a = svg.findall(".//{http://www.w3.org/2000/svg}tspan")
+
+    for k in a:
+        the_text = str(k.text)
+        for thing in h:
+            the_dict = dict(thing)
+            the_text = helpers.multireplace(the_text, the_dict)
+        if k.text != None and the_text != None:
+            k.text = the_text   
+
+    out = ET.tostring(svg, encoding='utf-8', pretty_print=True)
+
+    with open('test.svg', 'wb') as f:
+        f.write(out)
+
 l = LogicManipulator(logic, aliases)
 
 first_aliases = l.l.aliases
 
 print(l.l.pretty_print())
 
-
 l.change_type('PLT', 'a') # Change to automation
 l.change_type('PSV', 'a') # Change to automation
 l.change_type('PMV', 'a') # Change to automation
 l.convert_timers('PCT16-23', 'PCT', 'AST', asv_min=30) # Convert DO and PU only timers
-l.reorder_type('ALT', 1)  # Reordering
+
+print(l.l.pretty_print())
+
+
+l.reorder_type('ALT', 10) # Reordering, minimum = 10 for the future!
 l.reorder_type('ASV', 30) # Reordering, minimum = 30 for the future!
 l.reorder_type('AMV', 30) # Reordering, minimum = 30 for the future!
-l.reorder_type('AST', 10) # Reordering
-
+l.reorder_type('AST', 10) # Reordering, minimum = 10 for the future!
 
 l.l.add_alias('ASV040','C79CLHV','ARecl Close of HV CB')
 l.l.add_alias('ASV041','C79CLLV','ARecl Close of LV CB')
 
-print(l.l.pretty_print(withAliases=False)) # pretty print
-print(l.l.print_aliases())
+print(l.l.pretty_print(withAliases=True)) # pretty print
+
+print(l.l)
 
 second_aliases = l.l.aliases
+
+update_svg(first_aliases, second_aliases, l.history)
+
+
+
+
 
 """
 d = Differ()
@@ -585,31 +623,6 @@ print(l.l.pretty_print())
 
 # TODO: Used logic should be able to be based on definitions only to distinguish protection and automation logic
 
-def update_svg(a, b, h):
 
-    new_dict = {}
-    for k1, v1 in a.items():
-        for k2, v2 in b.items():
-            if v1 == v2:
-                new_dict[k1] = k2
-    
-    h.append(new_dict)
-    
-    xml = ET.parse('/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/setting_guide/media/autoreclose_logic_diagram.svg')
-    svg = xml.getroot()
-    a = svg.findall(".//{http://www.w3.org/2000/svg}tspan")
 
-    for k in a:
-        the_text = str(k.text)
-        for thing in h:
-            the_dict = dict(thing)
-            the_text = helpers.multireplace(the_text, the_dict)
-        if k.text != None and the_text != None:
-            k.text = the_text   
 
-    out = ET.tostring(svg, encoding='utf-8', pretty_print=True)
-
-    with open('test.svg', 'wb') as f:
-        f.write(out)
-
-update_svg(first_aliases, second_aliases, l.history)
