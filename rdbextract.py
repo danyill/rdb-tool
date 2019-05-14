@@ -32,12 +32,15 @@ import argparse
 import glob
 import re
 
+from itertools import zip_longest
 from pathlib import Path
 
 import tablib
 import olefile
 
-__version__ = "Goldilocks"
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+
+__version__ = "GratefulDead"
 
 RDB_EXTENSION = 'RDB'
 BASE_PATH = os.path.dirname(os.path.realpath(__file__))
@@ -173,26 +176,18 @@ def main(arg=None):
 
 def return_file_paths(args_path, file_extension):
 
-    if args_path[0].replace(r'"', '') == ".":
-        np = list(Path('.').glob('**/*.' + file_extension.lower()))
+    fpath = args_path[0].replace(r'"', '')
+    
+    if fpath == ".":
+        files = list(Path('.').glob('**/*.' + file_extension.lower()))
     else:
-        np = Path(args_path[0])
+        files = Path(fpath).resolve().glob('*.rdb')
 
-    files = [str(p.resolve()) for p in np]
+    return [str(f) for f in files]
 
-    return files
-
-def walkabout(p_or_f, file_extension):
-    """ searches through a path p_or_f, picking up all files with EXTN
-    returns these in an array.
-    """
-    return_files = []
-    for root, dirs, files in os.walk(p_or_f, topdown=False):
-        #print files
-        for name in files:
-            if (os.path.basename(name)[-3:]).upper() == file_extension:
-                return_files.append(os.path.join(root,name))
-    return return_files
+def grouper(iterable, n, fillvalue=None):
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 def process_rdb_files(files_to_do, args):
     parameter_info = []
@@ -200,32 +195,32 @@ def process_rdb_files(files_to_do, args):
     for filename in files_to_do:
         # print filename
         rdb_info = get_ole_data(filename)
-        parameter_info += extract_parameters(filename, rdb_info, args)
+        new_data = extract_parameters(filename, rdb_info, args)
+        parameter_info += new_data
 
-    # for exporting to Excel or CSV
-    #print parameter_info
-    data = tablib.Dataset()
-    for k in parameter_info:
-        data.append(k)
-    data.headers = OUTPUT_HEADERS
+    data = tablib.Dataset(headers=['filename'] + args.settings)
+
+    # group output data by parameter
+    grouped = grouper(parameter_info, len(args.settings), '')
+
+    for file_data in grouped:
+        data.append([file_data[0][0]] + [k[-1] for k in file_data])
 
     # don't overwrite existing file
     name = OUTPUT_FILE_NAME
     if args.o == 'csv' or args.o == 'xlsx':
-        # this is stupid and klunky
+        # this is stupid and klunky but hey
         while os.path.exists(name + '.csv') or os.path.exists(name + '.xlsx'):
             name += '_'
-
-    print(data)
 
     # write data
     if args.o == None:
         pass
     elif args.o == 'csv':
-        with open(name + '.csv','wb') as output:
+        with open(name + '.csv', 'wb') as output:
             output.write(data.csv)
     elif args.o == 'xlsx':
-        with open(name + '.xlsx','wb') as output:
+        with open(name + '.xlsx', 'wb') as output:
             output.write(data.xlsx)
 
     if args.console == True:
@@ -241,6 +236,9 @@ def get_ole_data(filename):
     except:
         print('Failed to read streams in file: ' + filename)
     return data
+
+def fix_string(text):
+    return re.sub(ILLEGAL_CHARACTERS_RE, '', text)
 
 def extract_parameters(filename, rdb_info, args):
     fn = os.path.basename(filename)
@@ -270,7 +268,6 @@ def extract_parameters(filename, rdb_info, args):
             settings_name = str(stream[0][1])
             stream_name = str(stream[0][-1]).upper()
 
-
             # lookup for group to file to restrict examination
             # parameters are always:
             # Relays > Setting Name > Settings Files
@@ -280,17 +277,19 @@ def extract_parameters(filename, rdb_info, args):
                 or stream[0][-1].upper() in category_file_list):
 
                 if search_parameter == 'FID':
-                    # special parameters are here
-                    return_value = extract_fid(stream[1].decode('utf-8'))
+                    try:
+                        return_value = extract_fid(stream[1].decode('ascii', errors="ignore"))
+                    except:
+                        return_value = "Unable to decode rdb file"
+
                 else:
-                    #print(stream[1].decode('utf-8'))
-                    return_value = get_stream_parameter(search_parameter,
-                                                        stream[1].decode('utf-8'))
+                    try:
+                        return_value = get_stream_parameter(search_parameter,
+                                                            stream[1].decode('ascii', errors="ignore"))
+                    except:
+                        return_value = "Unable to decode rdb file"
 
             if return_value != []:
-                # print return_value
-                # print search_parameter
-                # print category_file_list
                 parameter_info.append([fn, settings_name, \
                     stream_name, search_parameter, return_value[0]])
                 break
@@ -298,6 +297,7 @@ def extract_parameters(filename, rdb_info, args):
         else:
             parameter_info.append([fn, 'NA',\
                     "N/A", search_parameter, NOT_FOUND])
+
     return parameter_info
 
 def extract_fid(stream):
@@ -339,7 +339,8 @@ if __name__ == '__main__':
         # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\SI" --settings "RID TID SID G1:81D1P G1:81D1D 81D2P 81D2D TR FID"')
         # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\" --settings "RID TID G1:51P1P G1:51P1TD G1:51P1C TR FID"')
         # W:\Education\Current\Stationware Dump
-        main(r'-o xlsx "." --settings "RID TID G1:51P1P G1:51P1TD G1:51P1C TR FID F1:T15_LED"')
+        #main(r'-o xlsx "/media/mulhollandd/KINGSTON/stationware/rdb" --settings "RID TID FID"')
+        main(r'-o xlsx "/media/mulhollandd/KINGSTON/stationware/rdb" --settings "RID TID SID FID"')
 
     else:
         main()
