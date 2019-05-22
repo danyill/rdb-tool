@@ -29,6 +29,7 @@ TODO:
 import sys
 import os
 import argparse
+import fnmatch
 import glob
 import re
 
@@ -56,6 +57,8 @@ SEL_SETTING_EOL = r'(\r\n|\x1c\r\n)'
 SEL_SETTING_EOL = r''
 SEL_SETTING_NAME = r'[\w _]*'
 SEL_FID_EXPRESSION='^FID=([\w :+/\\()!,.\-_\\*]{10,})\r\n'
+SEL_PARTNO_EXPRESSION='^PARTNO=([\w :+/\\()!,.\-_\\*]{10,})\r\n'
+SEL_BFID_EXPRESSION='^BFID=([\w :+/\\()!,.\-_\\*]{10,})\r\n'
 
 OUTPUT_FILE_NAME = "output"
 NOT_FOUND = 'Not Found'
@@ -174,16 +177,28 @@ def main(arg=None):
         sys.exit()
         os.system("Pause")
 
+def findfiles(which, where='.'):
+    '''Returns list of filenames from `where` path matched by 'which'
+       shell pattern. Matching is case-insensitive.'''
+    
+    # TODO: recursive param with walk() filtering
+    rule = re.compile(fnmatch.translate(which), re.IGNORECASE)
+    return [os.path.join(where, name) for name in os.listdir(where) if rule.match(name)]
+
 def return_file_paths(args_path, file_extension):
 
-    fpath = args_path[0].replace(r'"', '')
-    
+    return findfiles('*.' + file_extension.lower(), args_path[0].replace('"', ''))
+
+    """fpath = args_path[0].replace(r'"', '')
+
     if fpath == ".":
         files = list(Path('.').glob('**/*.' + file_extension.lower()))
+        
     else:
         files = Path(fpath).resolve().glob('*.rdb')
 
     return [str(f) for f in files]
+    """
 
 def grouper(iterable, n, fillvalue=None):
     args = [iter(iterable)] * n
@@ -281,6 +296,17 @@ def extract_parameters(filename, rdb_info, args):
                         return_value = extract_fid(stream[1].decode('ascii', errors="ignore"))
                     except:
                         return_value = "Unable to decode rdb file"
+                elif search_parameter == 'BFID':
+                    try:
+                        return_value = extract_bfid(stream[1].decode('ascii', errors="ignore"))
+                    except:
+                        return_value = "Unable to decode rdb file"
+
+                elif search_parameter == 'PARTNO':
+                    try:
+                        return_value = extract_partno(stream[1].decode('ascii', errors="ignore"))
+                    except:
+                        return_value = "Unable to decode rdb file"
 
                 else:
                     try:
@@ -304,6 +330,17 @@ def extract_fid(stream):
     # FIDs look like this for example:
     return re.findall(SEL_FID_EXPRESSION, \
         stream, flags=re.MULTILINE)
+
+def extract_bfid(stream):
+    # FIDs look like this for example:
+    return re.findall(SEL_BFID_EXPRESSION, \
+        stream, flags=re.MULTILINE)
+
+def extract_partno(stream):
+    # PARTNOs look like this for example:
+    return re.findall(SEL_PARTNO_EXPRESSION, \
+        stream, flags=re.MULTILINE)
+
 
 def get_stream_parameter(parameter, stream):
     return re.findall('^' + parameter + \
@@ -340,7 +377,7 @@ if __name__ == '__main__':
         # main(r'-o xlsx "W:\Education\Current\Stationware Dump\20150511\" --settings "RID TID G1:51P1P G1:51P1TD G1:51P1C TR FID"')
         # W:\Education\Current\Stationware Dump
         #main(r'-o xlsx "/media/mulhollandd/KINGSTON/stationware/rdb" --settings "RID TID FID"')
-        main(r'-o xlsx "/media/mulhollandd/KINGSTON/stationware/rdb" --settings "RID TID SID FID"')
+        main(r'-o xlsx "/media/mulhollandd/KINGSTON/stationware/rdb" --settings "RID TID SID FID PARTNO BFID"')
 
     else:
         main()
