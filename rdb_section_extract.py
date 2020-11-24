@@ -80,15 +80,18 @@ SEL_FILES_TO_GROUP = {
 
     }
 
-def process_file(filepath, args):
-    rdb_info = get_ole_data(filepath)
+def process_file(filepath, args, settingsName=None):
+    rdb_info = get_ole_data(filepath, settingsName=settingsName)
     return extract_parameters(filepath, rdb_info, args)
 
-def get_ole_data(filepath):
+def get_ole_data(filepath,settingsName=None):
     data = []
+    listdir = []
     try:
         ole = olefile.OleFileIO(filepath)
         listdir = ole.listdir()
+        if settingsName:
+            listdir = [l for l in listdir if l[1]==settingsName]
         for direntry in listdir:
             data.append([direntry, ole.openstream(direntry).getvalue()])
     except:
@@ -102,10 +105,7 @@ def extract_parameters(filepath, rdb_info, txtfile):
     for stream in rdb_info:
         settings_name = str(stream[0][1])
         stream_name = str(stream[0][-1]).upper()
-
         if stream_name in SEL_FILES_TO_GROUP[txtfile]:
-
-            #print(stream_name, settings_name)
             return [settings_name, stream[1].decode('utf-8')]
 
 def get_sel_setting(text):
@@ -245,11 +245,10 @@ def sum_logic_usage_multiple_groups(d, group_title='Group', settings_name=None, 
 
     return('\n'.join(info))
 
-def get_logic(filepath, *names):
+def get_logic(filepath, *names, settingsName=None):
     logics = {}
     for name in names:
-        #print(filepath, name)
-        [settings_name, output] = process_file(filepath, name)
+        [settings_name, output] = process_file(filepath, name, settingsName)
         lines = get_sel_setting(output)
         result = []
         for settings in lines:
@@ -258,16 +257,16 @@ def get_logic(filepath, *names):
         logics[name] = logic_text
     return logics
 
-def get_logic_total(path, groups, includeAutomation=True):
+def get_logic_total(path, groups, includeAutomation=True, settings_name=None):
     # get logic for number of protection 
     groups_new = ['L' + str(g) for g in groups]
-    protection = get_logic(path, *groups_new)
+    protection = get_logic(path, *groups_new, settingsName=settings_name)
     
     automation_arr = []
     if includeAutomation:
         for block in range(1,10+1):
             #print(get_logic(path, 'A' + str(block)))
-            automation_arr.append(get_logic(path, 'A' + str(block))['A' + str(block)])
+            automation_arr.append(get_logic(path, 'A' + str(block), settingsName=settings_name)['A' + str(block)])
         automation = '\n'.join(automation_arr)
         return [protection, automation]
     
@@ -284,7 +283,7 @@ def plogic_used(filepath, group_prefix, settings_name, *nums):
 
 def pa_logic_used(filepath, group_prefix, settings_name, *nums):
 
-    logics = get_logic_total(filepath, nums, includeAutomation=True)
+    logics = get_logic_total(filepath, nums, includeAutomation=True, settings_name=settings_name)
     LINES = ['Lines Used (w/ comment lines)', 'Lines Used (w/o comment lines)']
     
     automation = sel_logic_count.calc_usage_raw(logics[1])
