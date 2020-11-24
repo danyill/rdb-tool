@@ -356,6 +356,7 @@ if __name__ == '__main__':
     #path = '/media/mulhollandd/KINGSTON/standard-designs/transformer-protection/SEL487E-3_Transformer_Protection_Settings/settings/SEL-487E-3.rdb'
     #path = r'G:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
     path = r'F:\standard-designs\transformer-protection\SEL487E-3_Transformer_Protection_Settings\settings\SEL-487E-3.rdb'
+    path = r'/media/mulhollandd/KINGSTON/standard-designs/capacitor-protection/SEL487E-3_Capacitor_Protection_Settings/settings/SEL-487E-3.rdb'
     #path = '/home/mulhollandd/Downloads/junk/SEL-487E-3.rdb'
     #print(plogic_used(path, 'Application', 1, 2))
 
@@ -365,7 +366,7 @@ if __name__ == '__main__':
     
     #print(pa_logic_used(path, 'Application', 1, 2))
     #print(plogic_used(path, 'Application', 'Blah', 'L1', 'L2'))
-    pa_logic_used(path, 'Application', 'TYP123', '1')
+    pa_logic_used(path, 'Application', 'TYP123_DStarNE', '1')
     
     #output = process_file(path, 'R1')
     #print(output)
